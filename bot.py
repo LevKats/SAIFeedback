@@ -27,9 +27,28 @@ class Descriptor:
         self.index += 1
         return self.data[self.index]
 
+    def get(self):
+        if len(self.data) != 0:
+            return self.data[self.index]
+        else:
+            raise RuntimeError("list is empty")
+
     def prev(self):
+        if self.index <= 0:
+            raise RuntimeError("self.index <= 0")
         self.index -= 1
         return self.data[self.index]
+
+
+def batch_generator(iterable, batch_size):
+    batch = []
+    for item in iterable:
+        batch.append(item)
+        if len(batch) == batch_size:
+            yield batch
+            batch = []
+    if len(batch) != 0:
+        yield batch
 
 
 class RegisterForm(StatesGroup):
@@ -91,10 +110,10 @@ class Profile(StatesGroup):
 class Courses(StatesGroup):
     select_course = State()
 
-    select_course_to_enrol = State
+    select_course_to_enrol = State()
     enrol_course_confirm = State()
 
-    delete_course_confirm = State
+    delete_course_confirm = State()
 
 
 class FeedBack(StatesGroup):
@@ -296,8 +315,12 @@ class SAIBot:
             resize_keyboard=True, selective=True
         )
         markup.add("←", "/menu", "→")
-        for row in descriptor.next():
-            markup.add(row)
+        try:
+            for row in descriptor.get():
+                print(row)
+                markup.add(row)
+        except RuntimeError:
+            pass
         return markup
 
     async def menu_select_activity_handler(
@@ -310,10 +333,20 @@ class SAIBot:
         )
         if activity == "Курсы":
             await Courses.select_course.set()
-            descriptor = Descriptor(iter(
-                self.database.get_student_events(student)
+            try:
+                student = self.database.get_student(
+                    telegram_id=telegram_id
+                )
+            except RuntimeError:
+                return
+            descriptor = Descriptor(batch_generator(
+                self.database.get_student_events(student), 5
             ))
             self.descriptors[telegram_id] = descriptor
+            try:
+                descriptor.next()
+            except RuntimeError:
+                pass
             markup = SAIBot.select_common_keyboard(descriptor)
             markup.add("Записаться на другой курс")
             await message.reply("Ваши курсы", reply_markup=markup)
@@ -324,21 +357,24 @@ class SAIBot:
                  "Имя: {}\n"
                  "Группа: {}\n"
                  "telegram id: {}").format(
-                    student.nickname, self.database.get_group(
-                        student.group_id
-                    ), student.telegram_id
+                    student.nickname, student.group.name,
+                    student.telegram_id
                 ),
                 reply_markup=SAIBot.profile_keyboard()
             )
         elif activity == "Отзывы":
             await FeedBack.select_feedback.set()
             descriptor = Descriptor(
-                iter([
+                batch_generator([
                     row[0].title for row in
                     self.database.feedbacks_generator(5)
-                ])
+                ], 5)
             )
             self.descriptors[telegram_id] = descriptor
+            try:
+                descriptor.next()
+            except RuntimeError:
+                pass
             markup = SAIBot.select_common_keyboard(descriptor)
             markup.add("Написать новый отзыв")
             markup.add("Показать мои отзывы")
@@ -351,26 +387,245 @@ class SAIBot:
             markup = self.group_selection_keyboard("Новая группа")
             await message.reply("Группы", reply_markup=markup)
         elif activity == "События" and student.permissions != 'user':
-            descriptor = Descriptor(iter(self.database.get_event_name_list()))
+            descriptor = Descriptor(batch_generator(
+                self.database.get_event_name_list(), 5
+            ))
             self.descriptors[telegram_id] = descriptor
+            try:
+                descriptor.next()
+            except RuntimeError:
+                pass
             markup = SAIBot.select_common_keyboard(descriptor)
             markup.add("Новое событие")
             await EditEvents.select_event.set()
             await message.reply("События", reply_markup=markup)
         elif activity == "Учителя" and student.permissions != 'user':
-            descriptor = Descriptor(iter(self.database.get_teacher_name_list()))
+            descriptor = Descriptor(batch_generator(
+                self.database.get_teacher_name_list(), 5
+            ))
             self.descriptors[telegram_id] = descriptor
+            try:
+                descriptor.next()
+            except RuntimeError:
+                pass
             markup = SAIBot.select_common_keyboard(descriptor)
             markup.add("Добавить")
             await EditTeachers.select_teacher.set()
             await message.reply("Учителя", reply_markup=markup)
         elif activity == "Помощь":
             await state.finish()
-            await message.reply("Используйте /help")
+            await message.reply(
+                "Используйте /help", reply_markup=types.ReplyKeyboardRemove()
+            )
         else:
             await message.reply(
                 "Неверное действие. Попробуйте еще раз"
             )
+
+    async def select_course_handler(
+            self, message: types.Message, state: FSMContext
+    ):
+        text = message.text
+        student = self.database.get_student(
+            telegram_id=str(message.from_user.id)
+        )
+        telegram_id = student.telegram_id
+        descriptor = self.descriptors[telegram_id]
+        if text == "←":
+            try:
+                descriptor.prev()
+            except RuntimeError:
+                pass
+            markup = SAIBot.select_common_keyboard(descriptor)
+            markup.add("Записаться на другой курс")
+            await message.reply("Ваши курсы", reply_markup=markup)
+        elif text == "→":
+            try:
+                descriptor.next()
+            except RuntimeError:
+                pass
+            markup = SAIBot.select_common_keyboard(descriptor)
+            markup.add("Записаться на другой курс")
+            await message.reply("Ваши курсы", reply_markup=markup)
+        elif text == "Записаться на другой курс":
+            await Courses.select_course_to_enrol.set()
+            try:
+                student = self.database.get_student(
+                    telegram_id=telegram_id
+                )
+            except RuntimeError:
+                return
+            descriptor = Descriptor(batch_generator(
+                self.database.get_available_events_for_student(student),
+                5
+            ))
+            self.descriptors[telegram_id] = descriptor
+            try:
+                descriptor.next()
+            except RuntimeError:
+                pass
+            markup = SAIBot.select_common_keyboard(descriptor)
+            await message.reply("Новый курс", reply_markup=markup)
+        elif text == "ОК":
+            markup = SAIBot.select_common_keyboard(descriptor)
+            markup.add("Записаться на другой курс")
+            await message.reply("Ваши курсы", reply_markup=markup)
+        elif text == "Отменить запись":
+            markup = types.ReplyKeyboardMarkup(
+                resize_keyboard=True, selective=True
+            )
+            markup.add("Да", "Нет")
+            await Courses.delete_course_confirm.set()
+            await message.reply("Вы уверены?", reply_markup=markup)
+        else:
+            try:
+                async with state.proxy() as data:
+                    event = self.database.get_event(text)
+                    data["event_to_delete"] = event
+                markup = types.ReplyKeyboardMarkup(
+                    resize_keyboard=True, selective=True
+                )
+                try:
+                    self.database.get_student(
+                        telegram_id=telegram_id
+                    )
+                    self.database.get_event(event.name)
+                except RuntimeError:
+                    return
+                if not self.database.is_group_event(student, event):
+                    markup.add("Отменить запись")
+                markup.add("ОК")
+                await message.reply(("Название: {}\n"
+                                     "Дата первого занятия: {}\n"
+                                     "Является регулярным? {}\n"
+                                     "Преподаватель {}\n").format(
+                    event.name, event.date, event.is_regular,
+                    event.teacher.name), reply_markup=markup)
+            except RuntimeError:
+                await message.reply("Нет такого курса")
+
+    async def select_course_to_enrol_handler(
+            self, message: types.Message, state: FSMContext
+    ):
+        text = message.text
+        # student = self.database.get_student(
+        #     telegram_id=str(message.from_user.id)
+        # )
+        # telegram_id = message.from_user.id
+        descriptor = self.descriptors[str(message.from_user.id)]
+        if text == "←":
+            try:
+                descriptor.prev()
+            except RuntimeError:
+                pass
+            markup = SAIBot.select_common_keyboard(descriptor)
+            await message.reply("Новый курс", reply_markup=markup)
+        elif text == "→":
+            try:
+                descriptor.next()
+            except RuntimeError:
+                pass
+            markup = SAIBot.select_common_keyboard(descriptor)
+            await message.reply("Новый курс", reply_markup=markup)
+        else:
+            try:
+                async with state.proxy() as data:
+                    event = self.database.get_event(text)
+                    data["enrol_course"] = event
+                markup = types.ReplyKeyboardMarkup(
+                    resize_keyboard=True, selective=True
+                )
+
+                markup.add("Да", "Нет")
+                await Courses.enrol_course_confirm.set()
+                await message.reply("Вы уверены?", reply_markup=markup)
+            except RuntimeError:
+                await message.reply("Нет такого курса")
+
+    async def delete_course_confirm_handler(
+            self, message: types.Message, state: FSMContext
+    ):
+        text = message.text
+        if text == "Да":
+            async with state.proxy() as data:
+                try:
+                    self.database.delete_pearson_event(
+                        self.database.get_student(
+                            telegram_id=str(message.from_user.id)
+                        ),
+                        data["event_to_delete"]
+                    )
+                    await state.finish()
+                    await message.reply(
+                        "Удаление", reply_markup=types.ReplyKeyboardRemove()
+                    )
+                except RuntimeError:
+                    await state.finish()
+                    await message.reply(
+                        "Ошибка", reply_markup=types.ReplyKeyboardRemove()
+                    )
+        elif text == "Нет":
+            await state.finish()
+            await message.reply(
+                "Отмена удаления", reply_markup=types.ReplyKeyboardRemove()
+            )
+        else:
+            await message.reply("Неверный вариент")
+
+    async def enrol_course_confirm_handler(
+            self, message: types.Message, state: FSMContext
+    ):
+        text = message.text
+        if text == "Да":
+            async with state.proxy() as data:
+                try:
+                    self.database.add_pearson_event(
+                        self.database.get_student(
+                            telegram_id=str(message.from_user.id)
+                        ).telegram_id,
+                        data["enrol_course"].name
+                    )
+                    await state.finish()
+                    await message.reply(
+                        "Успех", reply_markup=types.ReplyKeyboardRemove()
+                    )
+                except RuntimeError:
+                    await state.finish()
+                    await message.reply(
+                        "Ошибка", reply_markup=types.ReplyKeyboardRemove()
+                    )
+        elif text == "Нет":
+            await state.finish()
+            await message.reply(
+                "Отмена записи", reply_markup=types.ReplyKeyboardRemove()
+            )
+        else:
+            await message.reply("Неверный вариент")
+
+    async def print_profile_handler(
+            self, message: types.Message, state: FSMContext
+    ):
+        pass
+
+    async def select_feedback_handler(
+            self, message: types.Message, state: FSMContext
+    ):
+        pass
+
+    async def select_group_handler(
+            self, message: types.Message, state: FSMContext
+    ):
+        pass
+
+    async def select_event_handler(
+            self, message: types.Message, state: FSMContext
+    ):
+        pass
+
+    async def select_teacher_handler(
+            self, message: types.Message, state: FSMContext
+    ):
+        pass
 
     def __register_handlers(self):
         self.dp.register_message_handler(
@@ -392,6 +647,22 @@ class SAIBot:
 
         self.dp.register_message_handler(
             self.menu_select_activity_handler, state=MainMenu.select_activity
+        )
+
+        self.dp.register_message_handler(
+            self.select_course_handler, state=Courses.select_course
+        )
+        self.dp.register_message_handler(
+            self.select_course_to_enrol_handler,
+            state=Courses.select_course_to_enrol
+        )
+        self.dp.register_message_handler(
+            self.delete_course_confirm_handler,
+            state=Courses.delete_course_confirm
+        )
+        self.dp.register_message_handler(
+            self.enrol_course_confirm_handler,
+            state=Courses.enrol_course_confirm
         )
 
     def start_polling(self):

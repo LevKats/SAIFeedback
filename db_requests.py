@@ -406,7 +406,8 @@ class DBRequests:
                     student.telegram_id, event.name
                 )
             )
-        return pe
+        self.session.delete(pe)
+        self.session.commit()
 
     def add_group_event(self, group_name, event_name):
         group = self.session.query(self.group).filter(
@@ -447,7 +448,14 @@ class DBRequests:
                     group.name, event.name
                 )
             )
-        return ge
+        self.session.delete(ge)
+        self.session.commit()
+
+    def is_group_event(self, student, event):
+        return self.session.query(self.group_event).filter(
+            self.group_event.group_id == student.group.id,
+            self.group_event.event_id == event.id
+        ).first() is not None
 
     def get_student_events(self, student):
         query = self.session.query(self.event).outerjoin(
@@ -460,7 +468,14 @@ class DBRequests:
                 student.id == self.pearson_event.student_id
             )
         )
+        # print([row.name for row in query.all()])
         return [row.name for row in query.all()]
+
+    def get_available_events_for_student(self, student):
+        se = self.get_student_events(student)
+        for event in self.session.query(self.event):
+            if event.name not in se:
+                yield event.name
 
     def get_feedback(self, title):
         feedback = self.session.query(self.feedback).filter(
