@@ -505,6 +505,13 @@ class DBRequests:
             self.group_event.event_id == event.id
         ).first() is not None
 
+    def group_event_list(self, group):
+        return [
+            row.event.name for row in self.session.query(
+                self.group_event
+            ).filter(self.group_event.group_id == group.id)
+        ]
+
     def get_student_events(self, student):
         query = self.session.query(self.event).outerjoin(
             self.pearson_event, self.pearson_event.event_id == self.event.id
