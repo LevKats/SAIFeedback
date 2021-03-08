@@ -38,5 +38,18 @@ if __name__ == '__main__':
     db.add_group_event("332", "event1")
     db.add_group_event("332", "event2")
     db.add_event("event3", datetime(2021, 3, 1), True, "Ivanov")
+    db.add_student("ADMIN", environ["ADMIN_ID"], "332", "admin")
+
+    # db.add_student("levochka", "dffddf", "332", "all")
+    # student = db.get_student(nickname="levochka")
     bot = SAIBot(environ["API_TOKEN"], db, environ["ADMIN_TELEGRAM"])
     bot.start_polling()
+    # db.add_feedback(student, "tllktlrkl", "ererer")
+    # gen = db.feedbacks_generator(5, is_approved=False)
+    # feed1 = next(gen)[0][0]
+    # feed2 = feed1
+    # print(feed1)
+    # db.delete_feedback(feed1)
+    # db.delete_student(student)
+    # gen2 = db.feedbacks_generator(5, is_approved=False)
+    # feee3 = next(gen2)[0][0]

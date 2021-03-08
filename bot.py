@@ -1,31 +1,39 @@
-# import aiogram.utils.markdown as md
 from aiogram import Bot, Dispatcher, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
-# from aiogram.dispatcher.filters import Text
 from aiogram.dispatcher.filters.state import State, StatesGroup
-# from aiogram.types import ParseMode
 from aiogram.utils import executor
 
 from db_requests import DBRequests
 
-# from functools import partial
-
 
 class Descriptor:
-    def __init__(self, iterator):
+    def __init__(self, iterator, func=None):
         self.iterator = iterator
         self.data = []
         self.index = -1
+        self.dict = {}
+        self.func = func if func is not None else (lambda x: x)
 
     def next(self):
         if self.index + 1 == len(self.data):
             try:
-                self.data.append(next(self.iterator))
+                batch = next(self.iterator)
+                batch_to_add = []
+                for row in batch:
+                    key = self.func(row)
+                    batch_to_add.append(key)
+                    self.dict[key] = row
+                self.data.append(batch_to_add)
             except StopIteration:
                 raise RuntimeError("list ends")
         self.index += 1
         return self.data[self.index]
+
+    def __getitem__(self, item):
+        if item not in self.dict:
+            raise RuntimeError("no key {}".format(item))
+        return self.dict[item]
 
     def get(self):
         if len(self.data) != 0:
@@ -59,10 +67,15 @@ class RegisterForm(StatesGroup):
 class EditGroups(StatesGroup):
     select_group = State()
 
+    group_activity = State()
     # creates if doesn't exist
     new_group_name = State()
     new_group_email = State()
     new_group_monitor = State()
+
+    select_group_event = State()
+    delete_group_event_confirm = State()
+    add_group_event_select = State()
 
 
 class EditTeachers(StatesGroup):
@@ -75,8 +88,8 @@ class EditTeachers(StatesGroup):
 
 class EditEvents(StatesGroup):
     select_event = State()
-    new_group_name = State()
-    new_group_date = State()
+    new_event_name = State()
+    new_event_date = State()
     new_group_is_regular = State()
     new_group_teacher = State()
 
@@ -100,10 +113,6 @@ class Profile(StatesGroup):
     edit_nickname = State()
     edit_nickname_confirm = State()
 
-    edit_group = State()
-    edit_group_confirm = State()
-
-    delete_profile = State()
     delete_profile_confirm = State()
 
 
@@ -118,21 +127,15 @@ class Courses(StatesGroup):
 
 class FeedBack(StatesGroup):
     select_feedback = State()
-    feedback_id = State()
-    is_ok = State()
-    activity = State()
 
-    write_feedback = State()
+    feedback_activity = State()
+
     new_feedback_title = State()
-    new_feedback_type = State()
     new_feedback_teacher = State()
     new_feedback_event = State()
     new_feedback_text = State()
-    write_feedback_confirm = State()
 
-    approve = State()
-    delete_feedback = State()
-    vote = State()
+    delete_feedback_confirm = State()
 
 
 class SAIBot:
@@ -307,6 +310,7 @@ class SAIBot:
         markup.add("/menu")
         markup.add("сменить имя")
         markup.add("сменить группу")
+        markup.add("удалить профиль")
         return markup
 
     @staticmethod
@@ -321,6 +325,36 @@ class SAIBot:
                 markup.add(row)
         except RuntimeError:
             pass
+        return markup
+
+    @staticmethod
+    def select_feedback_keyboard(descriptor, student):
+        markup = SAIBot.select_common_keyboard(descriptor)
+        markup.add("Написать новый отзыв")
+        markup.add("Показать мои отзывы")
+        if student.permissions != "user":
+            markup.add("Показать немодерированные отзывы")
+        markup.add("Убрать фильтры")
+        return markup
+
+    @staticmethod
+    def confirm_keyboard():
+        markup = types.ReplyKeyboardMarkup(
+            resize_keyboard=True, selective=True
+        )
+        markup.add("Да", "Нет")
+        return markup
+
+    @staticmethod
+    def group_activity_keyboard():
+        markup = types.ReplyKeyboardMarkup(
+            resize_keyboard=True, selective=True
+        )
+        markup.add("/menu")
+        markup.add("Сменить имя")
+        markup.add("Сменить email")
+        markup.add("Сменить старосту")
+        markup.add("События группы")
         return markup
 
     async def menu_select_activity_handler(
@@ -365,21 +399,15 @@ class SAIBot:
         elif activity == "Отзывы":
             await FeedBack.select_feedback.set()
             descriptor = Descriptor(
-                batch_generator([
-                    row[0].title for row in
-                    self.database.feedbacks_generator(5)
-                ], 5)
+                self.database.feedbacks_generator(5, is_approved=True),
+                lambda row: row[0].title
             )
             self.descriptors[telegram_id] = descriptor
             try:
                 descriptor.next()
             except RuntimeError:
                 pass
-            markup = SAIBot.select_common_keyboard(descriptor)
-            markup.add("Написать новый отзыв")
-            markup.add("Показать мои отзывы")
-            if student.permissions != "user":
-                markup.add("Показать немодерированные отзывы")
+            markup = SAIBot.select_feedback_keyboard(descriptor, student)
             await message.reply("Отзывы", reply_markup=markup)
 
         elif activity == "Группы" and student.permissions != 'user':
@@ -471,10 +499,7 @@ class SAIBot:
             markup.add("Записаться на другой курс")
             await message.reply("Ваши курсы", reply_markup=markup)
         elif text == "Отменить запись":
-            markup = types.ReplyKeyboardMarkup(
-                resize_keyboard=True, selective=True
-            )
-            markup.add("Да", "Нет")
+            markup = SAIBot.confirm_keyboard()
             await Courses.delete_course_confirm.set()
             await message.reply("Вы уверены?", reply_markup=markup)
         else:
@@ -532,11 +557,7 @@ class SAIBot:
                 async with state.proxy() as data:
                     event = self.database.get_event(text)
                     data["enrol_course"] = event
-                markup = types.ReplyKeyboardMarkup(
-                    resize_keyboard=True, selective=True
-                )
-
-                markup.add("Да", "Нет")
+                markup = SAIBot.confirm_keyboard()
                 await Courses.enrol_course_confirm.set()
                 await message.reply("Вы уверены?", reply_markup=markup)
             except RuntimeError:
@@ -605,17 +626,600 @@ class SAIBot:
     async def print_profile_handler(
             self, message: types.Message, state: FSMContext
     ):
-        pass
+        text = message.text
+        if text == "сменить имя":
+            await Profile.edit_nickname.set()
+            await message.reply(
+                "Введите новое имя",
+                reply_markup=types.ReplyKeyboardRemove()
+            )
+        elif text == "сменить группу":
+            async with state.proxy() as data:
+                data["telegram_id"] = str(message.from_user.id)
+            await RegisterForm.group.set()
+            await message.reply(
+                "Выберите группу",
+                reply_markup=self.group_selection_keyboard()
+            )
+        elif text == "удалить профиль":
+            await Profile.delete_profile_confirm.set()
+            markup = SAIBot.confirm_keyboard()
+            await message.reply(
+                "Вы уверены?", reply_markup=markup
+            )
+        else:
+            await message.reply("Неверная команда")
+
+    async def edit_nickname_confirm_handler(
+            self, message: types.Message, state: FSMContext
+    ):
+        text = message.text
+        if text == "Да":
+            async with state.proxy() as data:
+                new_nickname = data['new_nickname']
+            if new_nickname in self.database.list_students_names():
+                await state.finish()
+                await message.reply(
+                    "Ошибка", reply_markup=types.ReplyKeyboardRemove()
+                )
+            else:
+                try:
+                    student = self.database.get_student(
+                        telegram_id=str(message.from_user.id)
+                    )
+                    student.nickname = new_nickname
+                    self.database.update_student(student)
+                    await state.finish()
+                    await message.reply(
+                        "Успех", reply_markup=types.ReplyKeyboardRemove()
+                    )
+                except RuntimeError:
+                    await state.finish()
+                    await message.reply(
+                        "Ошибка", reply_markup=types.ReplyKeyboardRemove()
+                    )
+        elif text == "Нет":
+            await state.finish()
+            await message.reply(
+                "Отмена", reply_markup=types.ReplyKeyboardRemove()
+            )
+        else:
+            await message.reply("Неверная команда")
+
+    async def edit_nickname_handler(
+            self, message: types.Message, state: FSMContext
+    ):
+        text = message.text
+        if text in self.database.list_students_names():
+            await message.reply("Имя {} занято".format(text))
+        else:
+            async with state.proxy() as data:
+                data['new_nickname'] = text
+            markup = SAIBot.confirm_keyboard()
+            await Profile.edit_nickname_confirm.set()
+            await message.reply("Вы уверены?", reply_markup=markup)
+
+    async def delete_profile_confirm_handler(
+            self, message: types.Message, state: FSMContext
+    ):
+        text = message.text
+        if text == "Да":
+            try:
+                self.database.delete_student(
+                    self.database.get_student(
+                        telegram_id=str(message.from_user.id)
+                    )
+                )
+                await state.finish()
+                await message.reply(
+                    "Удалено", reply_markup=types.ReplyKeyboardRemove()
+                )
+            except RuntimeError:
+                await state.finish()
+                await message.reply(
+                    "Ощибка", reply_markup=types.ReplyKeyboardRemove()
+                )
+        elif text == "Нет":
+            await state.finish()
+            await message.reply(
+                "Отмена", reply_markup=types.ReplyKeyboardRemove()
+            )
+        else:
+            await message.reply("Неверная команда")
 
     async def select_feedback_handler(
             self, message: types.Message, state: FSMContext
     ):
-        pass
+        text = message.text
+        student = self.database.get_student(
+            telegram_id=str(message.from_user.id)
+        )
+        telegram_id = student.telegram_id
+        descriptor = self.descriptors[telegram_id]
+        if text == "←":
+            try:
+                descriptor.prev()
+            except RuntimeError:
+                pass
+            markup = SAIBot.select_feedback_keyboard(descriptor, student)
+            await message.reply("Отзывы", reply_markup=markup)
+        elif text == "→":
+            try:
+                descriptor.next()
+            except RuntimeError:
+                pass
+            markup = SAIBot.select_feedback_keyboard(descriptor, student)
+            await message.reply("Отзывы", reply_markup=markup)
+        elif text == "Написать новый отзыв":
+            await FeedBack.new_feedback_title.set()
+            await message.reply(
+                "Введите заголовок", reply_markup=types.ReplyKeyboardRemove()
+            )
+        elif text == "Убрать фильтры":
+            descriptor = Descriptor(
+                self.database.feedbacks_generator(5, is_approved=True),
+                lambda row: row[0].title
+            )
+            self.descriptors[telegram_id] = descriptor
+            try:
+                descriptor.next()
+            except RuntimeError:
+                pass
+            markup = SAIBot.select_feedback_keyboard(descriptor, student)
+            await message.reply("Отзывы", reply_markup=markup)
+        elif text == "Показать мои отзывы":
+            descriptor = Descriptor(
+                self.database.feedbacks_generator(5, student=student),
+                lambda row: row[0].title
+            )
+            self.descriptors[telegram_id] = descriptor
+            try:
+                descriptor.next()
+            except RuntimeError:
+                pass
+            markup = SAIBot.select_feedback_keyboard(descriptor, student)
+            await message.reply("Отзывы", reply_markup=markup)
+        elif text == "Показать немодерированные отзывы" and \
+                student.permissions != "user":
+            descriptor = Descriptor(
+                self.database.feedbacks_generator(5, is_approved=False),
+                lambda row: row[0].title
+            )
+            self.descriptors[telegram_id] = descriptor
+            try:
+                descriptor.next()
+            except RuntimeError:
+                pass
+            markup = SAIBot.select_feedback_keyboard(descriptor, student)
+            await message.reply("Отзывы", reply_markup=markup)
+        else:
+            try:
+                async with state.proxy() as data:
+                    generator_row = descriptor[text]
+                    feedback = generator_row[0]
+                    data["selected_feedback"] = feedback.title
+                markup = types.ReplyKeyboardMarkup(
+                    resize_keyboard=True, selective=True
+                )
+                try:
+                    self.database.get_student(
+                        telegram_id=telegram_id
+                    )
+                    self.database.get_feedback(data["selected_feedback"])
+                except RuntimeError:
+                    return
+                if feedback.student_id == student.id or\
+                        student.permissions != 'user':
+                    markup.add("Удалить")
+                if student.permissions != 'user' and not feedback.is_approved:
+                    markup.add("Одобрить")
+                if feedback.is_approved:
+                    markup.add("Проголосовать")
+                markup.add("ОК")
+
+                def get_exist_attr(obj, attr):
+                    return getattr(obj, attr, None)
+
+                await FeedBack.feedback_activity.set()
+                await message.reply(("Заголовок: \n{}\n"
+                                     "Дата: {}\n"
+                                     "Автор: {}\n"
+                                     "На предмет {}\n"
+                                     "На Преподавателя {}\n"
+                                     "Текст: \n{}\n"
+                                     "Голосов: {}\n"
+                                     "Проверено модератором: {}").format(
+                    feedback.title, feedback.date,
+                    get_exist_attr(generator_row[3], "nickname"),
+                    get_exist_attr(generator_row[1], "name"),
+                    get_exist_attr(generator_row[2], "name"),
+                    feedback.text, feedback.votes, feedback.is_approved
+                ), reply_markup=markup)
+            except RuntimeError:
+                await message.reply("Нет такого отзыва")
+
+    async def feedback_activity_handler(
+            self, message: types.Message, state: FSMContext
+    ):
+        text = message.text
+        student = self.database.get_student(
+            telegram_id=str(message.from_user.id)
+        )
+        telegram_id = student.telegram_id
+        descriptor = self.descriptors[telegram_id]
+
+        async with state.proxy() as data:
+            feedback = self.database.get_feedback(data["selected_feedback"])
+
+        if (feedback.student_id == student.id or student.permissions != 'user')\
+                and text == "Удалить":
+            await FeedBack.delete_feedback_confirm.set()
+            markup = SAIBot.confirm_keyboard()
+            await message.reply(
+                "Вы уверены?", reply_markup=markup
+            )
+        elif student.permissions != 'user' and not feedback.is_approved and \
+                text == "Одобрить":
+            try:
+                self.database.approve_feedback(feedback)
+            except RuntimeError:
+                pass
+            markup = SAIBot.select_feedback_keyboard(descriptor, student)
+            await FeedBack.select_feedback.set()
+            await message.reply("Отзывы", reply_markup=markup)
+        elif feedback.is_approved and text == "Проголосовать":
+            feedback.votes = feedback.votes + 1
+            try:
+                self.database.update_feedback(feedback)
+                await state.finish()
+                await message.reply(
+                    "Успех", reply_markup=types.ReplyKeyboardRemove()
+                )
+            except RuntimeError:
+                await state.finish()
+                await message.reply(
+                    "Ошибка", reply_markup=types.ReplyKeyboardRemove()
+                )
+        elif text == "ОК":
+            markup = SAIBot.select_feedback_keyboard(descriptor, student)
+            await FeedBack.select_feedback.set()
+            await message.reply("Отзывы", reply_markup=markup)
+        else:
+            await message.reply("Неверная команда")
+
+    async def delete_feedback_confirm_handler(
+            self, message: types.Message, state: FSMContext
+    ):
+        text = message.text
+        student = self.database.get_student(
+            telegram_id=str(message.from_user.id)
+        )
+        async with state.proxy() as data:
+            feedback = self.database.get_feedback(data["selected_feedback"])
+            print(feedback)
+        if text == "Да":
+            await state.finish()
+            if feedback.student_id == student.id or \
+                    student.permissions != 'user':
+                try:
+                    # it's detached somehow...
+                    # TODO find solution
+                    self.database.delete_feedback(
+                        self.database.get_feedback(feedback.title)
+                    )
+                    await message.reply(
+                        "Удалено", reply_markup=types.ReplyKeyboardRemove()
+                    )
+                except RuntimeError:
+                    await message.reply(
+                        "Ошибка", reply_markup=types.ReplyKeyboardRemove()
+                    )
+            else:
+                await message.reply(
+                    "Ошибка", reply_markup=types.ReplyKeyboardRemove()
+                )
+        elif text == "Нет":
+            await state.finish()
+            await message.reply(
+                "Отмена", reply_markup=types.ReplyKeyboardRemove()
+            )
+        else:
+            await message.reply("Неверная команда")
+
+    async def new_feedback_title_handler(
+            self, message: types.Message, state: FSMContext
+    ):
+        text = message.text
+        try:
+            student = self.database.get_student(
+                telegram_id=str(message.from_user.id)
+            )
+        except RuntimeError:
+            await state.finish()
+            await message.reply("Ошибка")
+            return
+        try:
+            self.database.get_feedback(text)
+            await message.reply("Введите другой заголовок. Этот используется")
+        except RuntimeError:
+            descriptor = Descriptor(
+                batch_generator(self.database.get_student_events(student), 5),
+            )
+            async with state.proxy() as data:
+                data["student"] = student.nickname
+                data["title"] = text
+            telegram_id = str(message.from_user.id)
+            self.descriptors[telegram_id] = descriptor
+            try:
+                descriptor.next()
+            except RuntimeError:
+                pass
+            markup = SAIBot.select_common_keyboard(descriptor)
+            markup.add("Пропустить")
+            await FeedBack.new_feedback_event.set()
+            await message.reply("Мероприятия", reply_markup=markup)
+
+    async def new_feedback_event_handler(
+            self, message: types.Message, state: FSMContext
+    ):
+        text = message.text
+        telegram_id = str(message.from_user.id)
+        descriptor = self.descriptors[telegram_id]
+        if text == "←":
+            try:
+                descriptor.prev()
+            except RuntimeError:
+                pass
+            markup = SAIBot.select_common_keyboard(descriptor)
+            markup.add("Пропустить")
+            await message.reply("Мероприятия", reply_markup=markup)
+        elif text == "→":
+            try:
+                descriptor.next()
+            except RuntimeError:
+                pass
+            markup = SAIBot.select_common_keyboard(descriptor)
+            markup.add("Пропустить")
+            await message.reply("Мероприятия", reply_markup=markup)
+        elif text == 'Пропустить':
+            async with state.proxy() as data:
+                data["event"] = None
+            await FeedBack.new_feedback_teacher.set()
+            descriptor = Descriptor(
+                batch_generator(self.database.get_teacher_name_list(), 5),
+            )
+            telegram_id = str(message.from_user.id)
+            self.descriptors[telegram_id] = descriptor
+            try:
+                descriptor.next()
+            except RuntimeError:
+                pass
+            markup = SAIBot.select_common_keyboard(descriptor)
+            markup.add("Пропустить")
+            await message.reply("Преподаватели", reply_markup=markup)
+        else:
+            try:
+                event = self.database.get_event(text)
+                async with state.proxy() as data:
+                    data["event"] = event.name
+                await FeedBack.new_feedback_teacher.set()
+                descriptor = Descriptor(
+                    batch_generator(self.database.get_teacher_name_list(), 5),
+                )
+                telegram_id = str(message.from_user.id)
+                self.descriptors[telegram_id] = descriptor
+                try:
+                    descriptor.next()
+                except RuntimeError:
+                    pass
+                markup = SAIBot.select_common_keyboard(descriptor)
+                markup.add("Пропустить")
+                await message.reply("Преподаватели", reply_markup=markup)
+            except RuntimeError:
+                await message.reply("Неверная команда")
+
+    async def new_feedback_teacher_handler(
+            self, message: types.Message, state: FSMContext
+    ):
+        text = message.text
+        telegram_id = str(message.from_user.id)
+        descriptor = self.descriptors[telegram_id]
+        if text == "←":
+            try:
+                descriptor.prev()
+            except RuntimeError:
+                pass
+            markup = SAIBot.select_common_keyboard(descriptor)
+            markup.add("Пропустить")
+            await message.reply("Мероприятия", reply_markup=markup)
+        elif text == "→":
+            try:
+                descriptor.next()
+            except RuntimeError:
+                pass
+            markup = SAIBot.select_common_keyboard(descriptor)
+            markup.add("Пропустить")
+            await message.reply("Мероприятия", reply_markup=markup)
+        elif text == 'Пропустить':
+            async with state.proxy() as data:
+                data["teacher"] = None
+            await FeedBack.new_feedback_text.set()
+            await message.reply(
+                "Введите текст отзыва",
+                reply_markup=types.ReplyKeyboardRemove()
+            )
+        else:
+            try:
+                teacher = self.database.get_teacher(text)
+                async with state.proxy() as data:
+                    data["teacher"] = teacher.name
+                await FeedBack.new_feedback_text.set()
+                await message.reply(
+                    "Введите текст отзыва",
+                    reply_markup=types.ReplyKeyboardRemove()
+                )
+            except RuntimeError:
+                await message.reply("Неверная команда")
+
+    async def new_feedback_text_handler(
+            self, message: types.Message, state: FSMContext
+    ):
+        text = message.text
+        async with state.proxy() as data:
+            try:
+                kwargs = {}
+                if data['event'] is not None:
+                    kwargs['event'] = self.database.get_event(data['event'])
+                if data['teacher'] is not None:
+                    kwargs['teacher'] = self.database.get_teacher(
+                        data['teacher']
+                    )
+                self.database.add_feedback(
+                    self.database.get_student(nickname=data['student']),
+                    data['title'], text, **kwargs
+                )
+                success = True
+            except RuntimeError:
+                success = False
+            await state.finish()
+            await message.reply(
+                "Успех" if success else "Ошибка",
+                reply_markup=types.ReplyKeyboardRemove()
+            )
 
     async def select_group_handler(
             self, message: types.Message, state: FSMContext
     ):
-        pass
+        text = message.text
+        if text == "Новая группа":
+            async with state.proxy() as data:
+                data['selected_group'] = None
+            await EditGroups.new_group_name.set()
+            await message.reply(
+                "Введите новое имя группы",
+                reply_markup=types.ReplyKeyboardRemove()
+            )
+        else:
+            try:
+                group = self.database.get_group(text)
+                async with state.proxy() as data:
+                    data['selected_group'] = group.name
+                markup = SAIBot.group_activity_keyboard()
+                await EditGroups.group_activity.set()
+                await message.reply("Действия", reply_markup=markup)
+            except RuntimeError:
+                await message.reply("Неверная команда")
+
+    async def group_activity_handler(
+            self, message: types.Message, state: FSMContext
+    ):
+        text = message.text
+        if self.database.get_student(
+                telegram_id=str(message.from_user.id)
+        ).permissions == 'user':
+            await state.finish()
+            await message.reply(
+                "Ошибка", reply_markup=types.ReplyKeyboardRemove()
+            )
+        elif text == "Сменить имя":
+            await EditGroups.new_group_name.set()
+            await message.reply(
+                "Введите новое имя группы",
+                reply_markup=types.ReplyKeyboardRemove()
+            )
+        elif text == "Сменить email":
+            await EditGroups.new_group_email.set()
+            await message.reply(
+                "Введите новый email",
+                reply_markup=types.ReplyKeyboardRemove()
+            )
+        elif text == "Сменить старосту":
+            await EditGroups.new_group_monitor.set()
+            await message.reply(
+                "Новый контакт старосты",
+                reply_markup=types.ReplyKeyboardRemove()
+            )
+        elif text == "События группы":
+            pass
+        else:
+            await message.reply("Неверная команда")
+
+    async def new_group_name_handler(
+            self, message: types.Message, state: FSMContext
+    ):
+        text = message.text
+        async with state.proxy() as data:
+            is_new_group = data['selected_group'] is None
+            group = None
+            if not is_new_group:
+                group = self.database.get_group(data['selected_group'])
+        if text in self.database.list_groups():
+            await message.reply("Имя {} занято. Введите другое".format(text))
+        elif not is_new_group:
+            group.name = text
+            self.database.update_group(group)
+        else:
+            async with state.proxy() as data:
+                data['new_group_name'] = text
+            await EditGroups.new_group_email.set()
+            await message.reply(
+                "Введите новый email",
+                reply_markup=types.ReplyKeyboardRemove()
+            )
+
+    async def new_group_email_handler(
+            self, message: types.Message, state: FSMContext
+    ):
+        text = message.text
+        async with state.proxy() as data:
+            is_new_group = data['selected_group'] is None
+            group = None
+            if not is_new_group:
+                group = self.database.get_group(data['selected_group'])
+        if not is_new_group:
+            group.email = text
+            self.database.update_group(group)
+        else:
+            async with state.proxy() as data:
+                data['new_group_email'] = text
+            await EditGroups.new_group_monitor.set()
+            await message.reply(
+                "Новый контакт старосты",
+                reply_markup=types.ReplyKeyboardRemove()
+            )
+
+    async def new_group_monitor_handler(
+            self, message: types.Message, state: FSMContext
+    ):
+        text = message.text
+        async with state.proxy() as data:
+            is_new_group = data['selected_group'] is None
+            group = None
+            if not is_new_group:
+                group = self.database.get_group(data['selected_group'])
+        if not is_new_group:
+            group.monitor = text
+            self.database.update_group(group)
+        else:
+            async with state.proxy() as data:
+                try:
+                    self.database.add_group(
+                        data['new_group_name'], data['new_group_email'], text
+                    )
+                    success = True
+                except RuntimeError:
+                    success = False
+            await state.finish()
+            if success:
+                await message.reply(
+                    "Успех",
+                    reply_markup=types.ReplyKeyboardRemove()
+                )
+            else:
+                await message.reply(
+                    "Ошибка",
+                    reply_markup=types.ReplyKeyboardRemove()
+                )
 
     async def select_event_handler(
             self, message: types.Message, state: FSMContext
@@ -663,6 +1267,73 @@ class SAIBot:
         self.dp.register_message_handler(
             self.enrol_course_confirm_handler,
             state=Courses.enrol_course_confirm
+        )
+
+        self.dp.register_message_handler(
+            self.print_profile_handler,
+            state=Profile.print_profile
+        )
+        self.dp.register_message_handler(
+            self.delete_profile_confirm_handler,
+            state=Profile.delete_profile_confirm
+        )
+        self.dp.register_message_handler(
+            self.edit_nickname_handler,
+            state=Profile.edit_nickname
+        )
+        self.dp.register_message_handler(
+            self.edit_nickname_confirm_handler,
+            state=Profile.edit_nickname_confirm
+        )
+
+        self.dp.register_message_handler(
+            self.select_feedback_handler,
+            state=FeedBack.select_feedback
+        )
+        self.dp.register_message_handler(
+            self.feedback_activity_handler,
+            state=FeedBack.feedback_activity
+        )
+        self.dp.register_message_handler(
+            self.delete_feedback_confirm_handler,
+            state=FeedBack.delete_feedback_confirm
+        )
+        self.dp.register_message_handler(
+            self.new_feedback_title_handler,
+            state=FeedBack.new_feedback_title
+        )
+        self.dp.register_message_handler(
+            self.new_feedback_teacher_handler,
+            state=FeedBack.new_feedback_teacher
+        )
+        self.dp.register_message_handler(
+            self.new_feedback_event_handler,
+            state=FeedBack.new_feedback_event
+        )
+        self.dp.register_message_handler(
+            self.new_feedback_text_handler,
+            state=FeedBack.new_feedback_text
+        )
+
+        self.dp.register_message_handler(
+            self.select_group_handler,
+            state=EditGroups.select_group
+        )
+        self.dp.register_message_handler(
+            self.group_activity_handler,
+            state=EditGroups.group_activity
+        )
+        self.dp.register_message_handler(
+            self.new_group_name_handler,
+            state=EditGroups.new_group_name
+        )
+        self.dp.register_message_handler(
+            self.new_group_email_handler,
+            state=EditGroups.new_group_email
+        )
+        self.dp.register_message_handler(
+            self.new_group_monitor_handler,
+            state=EditGroups.new_group_monitor
         )
 
     def start_polling(self):

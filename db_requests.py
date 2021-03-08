@@ -120,23 +120,59 @@ class DBRequests:
 
             id = Column(Integer, primary_key=True)
             title = Column(String)
-            student_id = Column(Integer)
-            event_id = Column(Integer)
-            teacher_id = Column(Integer)
+            student_id = Column(Integer, ForeignKey('students.id'))
             text = Column(String)
             date = Column(DateTime)
             is_approved = Column(Boolean)
             votes = Column(Integer)
 
+            student = relationship("Student", back_populates="student_feedbacks")
+
             def __str__(self):
                 return (
-                    "Feedback(id={}, title={}, student_id={}, event_id={},"
-                    " teacher_id={}, text={}, date={}, is_approved={},"
+                    "Feedback(id={}, title={}, student_id={},,"
+                    " text={}, date={}, is_approved={},"
                     " votes = {})") \
                     .format(
-                    self.id, self.title. self.student_id, self.event_id,
-                    self.teacher_id, self.text, self.date, self.is_approved,
+                    self.id, self.title, self.student_id,
+                    self.text, self.date, self.is_approved,
                     self.votes
+                )
+
+        class FeedbackEvent(base):
+            __tablename__ = "feedback_events"
+
+            id = Column(Integer, primary_key=True)
+            feedback_id = Column(Integer, ForeignKey('feedbacks.id'))
+            event_id = Column(Integer, ForeignKey('events.id'))
+
+            feedback = relationship("Feedback", back_populates="feedback_events")
+            event = relationship("Event", back_populates="event_feedbacks")
+
+            def __str__(self):
+                return (
+                    "FeedbackEvent(id={}, feedback_id={},,"
+                    " event_id={})") \
+                    .format(
+                    self.id, self.feedback_id, self.event_id
+                )
+
+        class FeedbackTeacher(base):
+            __tablename__ = "feedback_teachers"
+
+            id = Column(Integer, primary_key=True)
+            feedback_id = Column(Integer, ForeignKey('feedbacks.id'))
+            teacher_id = Column(Integer, ForeignKey('teachers.id'))
+
+            feedback = relationship("Feedback", back_populates="feedback_teachers")
+            teacher = relationship("Teacher", back_populates="teacher_feedbacks")
+
+            def __str__(self):
+                return (
+                    "FeedbackTeacher(id={}, feedback_id={},,"
+                    " event_id={})") \
+                    .format(
+                    self.id, self.feedback_id, self.teacher_id
                 )
 
         self.group = Group
@@ -146,6 +182,8 @@ class DBRequests:
         self.pearson_event = PearsonEvent
         self.teacher = Teacher
         self.feedback = Feedback
+        self.feedback_event = FeedbackEvent
+        self.feedback_teacher = FeedbackTeacher
 
         self.group.group_events = relationship(
             "GroupEvent", order_by=GroupEvent.id, back_populates="group",
@@ -163,8 +201,17 @@ class DBRequests:
             "PearsonEvent", order_by=PearsonEvent.id, back_populates="event",
             cascade="all, delete, delete-orphan"
         )
+        self.event.event_feedbacks = relationship(
+            "FeedbackEvent", order_by=FeedbackEvent.id, back_populates="event",
+            cascade="all, delete, delete-orphan"
+        )
         self.student.pearson_events = relationship(
             "PearsonEvent", order_by=PearsonEvent.id,
+            back_populates="student",
+            cascade="all, delete, delete-orphan"
+        )
+        self.student.student_feedbacks = relationship(
+            "Feedback", order_by=Feedback.id,
             back_populates="student",
             cascade="all, delete, delete-orphan"
         )
@@ -172,9 +219,25 @@ class DBRequests:
             "Event", order_by=Event.id, back_populates="teacher",
             cascade="all, delete, delete-orphan"
         )
+        self.teacher.teacher_feedbacks = relationship(
+            "FeedbackTeacher", order_by=FeedbackTeacher.id,
+            back_populates="teacher",
+            cascade="all, delete, delete-orphan"
+        )
+        self.feedback.feedback_events = relationship(
+            "FeedbackEvent", order_by=FeedbackEvent.id,
+            back_populates="feedback",
+            cascade="all, delete, delete-orphan"
+        )
+        self.feedback.feedback_teachers = relationship(
+            "FeedbackTeacher", order_by=FeedbackTeacher.id,
+            back_populates="feedback",
+            cascade="all, delete, delete-orphan"
+        )
         base.metadata.create_all(engine)
         session = sessionmaker(bind=self.engine)
         self.session = session()
+        # self.session.expire_on_commit = False
 
         try:
             self.get_group("DEFAULT")
@@ -244,11 +307,6 @@ class DBRequests:
 
     def delete_teacher(self, teacher):
         self.session.delete(teacher)
-        feedbacks = self.session.query(self.feedback).filter(
-            self.feedback.teacher_id == teacher.id
-        ).all()
-        if feedbacks:
-            self.session.delete(feedbacks)
         self.session.commit()
 
     def update_teacher(self, new_teacher):
@@ -293,11 +351,6 @@ class DBRequests:
 
     def delete_event(self, event):
         self.session.delete(event)
-        feedbacks = self.session.query(self.feedback).filter(
-            self.feedback.event_id == event.id
-        ).all()
-        if feedbacks:
-            self.session.delete(feedbacks)
         self.session.commit()
 
     def update_event(self, new_event):
@@ -350,11 +403,6 @@ class DBRequests:
 
     def delete_student(self, student):
         self.session.delete(student)
-        feedbacks = self.session.query(self.feedback).filter(
-            self.feedback.student_id == student.id
-        ).all()
-        if feedbacks:
-            self.session.delete(feedbacks)
         self.session.commit()
 
     def update_student(self, new_student):
@@ -490,19 +538,23 @@ class DBRequests:
                 self.feedback.title == title
         ).first() is not None:
             raise RuntimeError("title {} exists".format(title))
-        rows = [
-            self.feedback(
-                student_id=student.id,
-                title=title,
-                text=text,
-                date=datetime.datetime.now(),
-                teacher_id=kwargs['teacher'].id if "teacher" in kwargs else -1,
-                event_id=kwargs['event'].id if "event" in kwargs else -1,
-                is_approved=False,
-                votes=0
-            )
-        ]
-        self.session.add_all(rows)
+        feedback = self.feedback(
+            student_id=student.id,
+            title=title,
+            text=text,
+            date=datetime.datetime.now(),
+            is_approved=False,
+            votes=0
+        )
+        if "teacher" in kwargs:
+            feedback_teacher = self.feedback_teacher()
+            feedback_teacher.teacher = kwargs['teacher']
+            feedback.feedback_teachers.append(feedback_teacher)
+        if 'event' in kwargs:
+            feedback_event = self.feedback_event()
+            feedback_event.event = kwargs['event']
+            feedback.feedback_events.append(feedback_event)
+        self.session.add(feedback)
         self.session.commit()
 
     def delete_feedback(self, feedback):
@@ -514,7 +566,6 @@ class DBRequests:
         self.session.commit()
 
     def update_feedback(self, new_feedback):
-        new_feedback.is_approved = False
         self.session.commit()
 
     def feedbacks_generator(self, batch_num, **kwargs):
@@ -523,38 +574,22 @@ class DBRequests:
             self.feedback, self.event, self.teacher, self.student
         ).join(self.student, self.feedback.student_id == self.student.id)
         query = query.outerjoin(
-            self.teacher, self.feedback.teacher_id == self.teacher.id
+            self.feedback_teacher,
+            self.feedback.id == self.feedback_teacher.feedback_id
         )
         query = query.outerjoin(
-            self.event, self.feedback.event_id == self.event.id
+            self.teacher, self.feedback_teacher.teacher_id == self.teacher.id
+        )
+        query = query.outerjoin(
+            self.feedback_event,
+            self.feedback.id == self.feedback_event.feedback_id
+        )
+        query = query.outerjoin(
+            self.event, self.feedback_event.event_id == self.event.id
         )
         if "student" in kwargs:
             query = query.filter(
                 self.feedback.student_id == kwargs["student"].id
-            )
-        if "for_student" in kwargs:
-            student = kwargs["for_student"]
-            query = query.outerjoin(
-                self.group_event,
-                self.group_event.event_id == self.feedback.event_id
-            )
-            query = query.outerjoin(
-                self.pearson_event,
-                self.pearson_event.event_id == self.feedback.event_id
-            )
-            query = query.filter(
-                or_(
-                    student.group.id == self.group_event.group_id,
-                    student.id == self.pearson_event.student_id
-                )
-            )
-        if "teacher" in kwargs:
-            query = query.filter(
-                self.feedback.teacher_id == kwargs["teacher"].id
-            )
-        if "event" in kwargs:
-            query = query.filter(
-                self.feedback.event_id == kwargs["event"].id
             )
         if "is_approved" in kwargs:
             query = query.filter(
