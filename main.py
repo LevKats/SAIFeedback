@@ -1,6 +1,13 @@
 from db_requests import DBRequests
 from sqlalchemy import create_engine
-from bot import SAIBot
+
+from bot_core import BotCore
+from bot_courses import BotCourses
+from bot_profile import BotProfile
+from bot_feedback import BotFeedback
+from bot_groups import BotGroups
+from bot_events import BotEvents
+
 from datetime import datetime
 import logging
 from os import environ
@@ -42,7 +49,11 @@ if __name__ == '__main__':
 
     # db.add_student("levochka", "dffddf", "332", "all")
     # student = db.get_student(nickname="levochka")
-    bot = SAIBot(environ["API_TOKEN"], db, environ["ADMIN_TELEGRAM"])
+    bot = BotCore(
+        environ["API_TOKEN"], db, environ["ADMIN_TELEGRAM"],
+        BotProfile, BotCourses, BotFeedback,
+        BotGroups, BotEvents
+    )
     bot.start_polling()
     # db.add_feedback(student, "tllktlrkl", "ererer")
     # gen = db.feedbacks_generator(5, is_approved=False)

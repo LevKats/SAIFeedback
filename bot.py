@@ -297,8 +297,6 @@ class SAIBot:
                          " измените группу в своем профиле позже"),
                         reply_markup=types.ReplyKeyboardRemove()
                     )
-                # await MainMenu.select_activity.set()
-
             else:
                 markup = self.group_selection_keyboard()
                 await message.reply(
