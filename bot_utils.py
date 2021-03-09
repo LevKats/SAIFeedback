@@ -75,10 +75,11 @@ class EditGroups(StatesGroup):
 
 class EditTeachers(StatesGroup):
     select_teacher = State()
-
+    teacher_activity = State()
     # creates if doesn't exist
     new_teacher_name = State()
     new_teacher_email = State()
+    delete_teacher_confirm = State()
 
 
 class EditEvents(StatesGroup):

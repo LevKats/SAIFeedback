@@ -95,3 +95,14 @@ class BotBase(object):
         markup.add("Сменить преподавателя")
         markup.add("Удалить событие")
         return markup
+
+    @staticmethod
+    def teacher_activity_keyboard():
+        markup = types.ReplyKeyboardMarkup(
+            resize_keyboard=True, selective=True
+        )
+        markup.add("/menu")
+        markup.add("Сменить имя")
+        markup.add("Сменить email")
+        markup.add("Удалить преподавателя")
+        return markup

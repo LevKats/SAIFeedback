@@ -7,6 +7,7 @@ from bot_profile import BotProfile
 from bot_feedback import BotFeedback
 from bot_groups import BotGroups
 from bot_events import BotEvents
+from bot_teachers import BotTeachers
 
 from datetime import datetime
 import logging
@@ -52,7 +53,7 @@ if __name__ == '__main__':
     bot = BotCore(
         environ["API_TOKEN"], db, environ["ADMIN_TELEGRAM"],
         BotProfile, BotCourses, BotFeedback,
-        BotGroups, BotEvents
+        BotGroups, BotEvents, BotTeachers
     )
     bot.start_polling()
     # db.add_feedback(student, "tllktlrkl", "ererer")
