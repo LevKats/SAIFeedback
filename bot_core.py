@@ -34,9 +34,13 @@ class BotCore(BotBase):
             resize_keyboard=True, selective=True
         )
 
+        permissions = {"user": 0, "moderator": 1, "admin": 2}
+
         for module in args:
-            self.main_menu_markup_moderator.add(module.func_name)
-            if module.permission == 'user':
+            priority = permissions[module.permission]
+            if priority >= permissions['moderator']:
+                self.main_menu_markup_moderator.add(module.func_name)
+            if priority >= permissions['user']:
                 self.main_menu_markup_user.add(module.func_name)
             self.modules.append(module(database, descriptors, self.dp))
         self.main_menu_markup_user.add("Помощь")

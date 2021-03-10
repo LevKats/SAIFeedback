@@ -21,11 +21,11 @@ class BotProfile(BotBase):
     ):
         activity = message.text
         telegram_id = str(message.from_user.id)
-        student = self.database.get_student(
-            telegram_id=telegram_id
-        )
         if activity == BotProfile.func_name:
             await Profile.print_profile.set()
+            student = self.database.get_student(
+                telegram_id=telegram_id
+            )
             await message.reply(
                 ("Ваш профиль:\n"
                  "Имя: {}\n"

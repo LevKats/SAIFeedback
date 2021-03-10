@@ -74,17 +74,20 @@ class BotEvents(BotBase):
         else:
             try:
                 event = self.database.get_event(text)
+                description = (
+                    "Событие: {}\n"
+                    "Дата: {}\n"
+                    "Постоянное? {}\n"
+                    "Преподаватель: {}"
+                ).format(
+                    event.name, event.date,
+                    event.is_regular, event.teacher.name
+                )
                 async with state.proxy() as data:
                     data['selected_event'] = event.name
                 await EditEvents.event_activity.set()
                 await message.reply(
-                    ("Событие: {}\n"
-                     "Дата: {}\n"
-                     "Постоянное? {}\n"
-                     "Преподаватель: {}").format(
-                        event.name, event.date,
-                        event.is_regular, event.teacher.name
-                    ),
+                    description,
                     reply_markup=BotBase.event_activity_keyboard()
                 )
             except RuntimeError:
@@ -149,12 +152,11 @@ class BotEvents(BotBase):
         text = message.text
         async with state.proxy() as data:
             is_new_event = data['selected_event'] is None
-            event = None
-            if not is_new_event:
-                event = self.database.get_event(data['selected_event'])
+            event_name = data['selected_event']
         if text in self.database.get_event_name_list():
             await message.reply("Имя {} занято. Введите другое".format(text))
         elif not is_new_event:
+            event = self.database.get_event(event_name)
             event.name = text
             self.database.update_event(event)
             await state.finish()
@@ -208,12 +210,11 @@ class BotEvents(BotBase):
         text = message.text
         async with state.proxy() as data:
             is_new_event = data['selected_event'] is None
-            event = None
-            if not is_new_event:
-                event = self.database.get_event(data['selected_event'])
+            event_name = data['selected_event']
         if text not in ['Да', 'Нет']:
             await message.reply("Неверная команда")
         elif not is_new_event:
+            event = self.database.get_event(event_name)
             event.is_regular = text == 'Да'
             self.database.update_event(event)
             await state.finish()
@@ -288,9 +289,11 @@ class BotEvents(BotBase):
                         )
                 else:
                     async with state.proxy() as data:
-                        event = self.database.get_event(
-                            data["selected_event"]
-                        )
+                        event_name = data["selected_event"]
+                    event = self.database.get_event(
+                        event_name
+                    )
+                    teacher = self.database.get_teacher(text)
                     event.teacher = teacher
                     self.database.update_event(event)
                     await state.finish()

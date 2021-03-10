@@ -6,6 +6,39 @@ import datetime
 import logging
 
 
+def debug_output(db):
+    logging.debug("\n\nTABLES:")
+    session = db.session
+    logging.debug("group:")
+    logging.debug("\n" + "\n".join(
+        [str(row) for row in session.query(db.group).all()]
+    ))
+    logging.debug("event:")
+    logging.debug("\n" + "\n".join(
+        [str(row) for row in session.query(db.event).all()]
+    ))
+    logging.debug("group_event:")
+    logging.debug("\n" + "\n".join(
+        [str(row) for row in session.query(db.group_event).all()]
+    ))
+    logging.debug("student:")
+    logging.debug("\n" + "\n".join(
+        [str(row) for row in session.query(db.student).all()]
+    ))
+    logging.debug("pearson_event:")
+    logging.debug("\n" + "\n".join(
+        [str(row) for row in session.query(db.pearson_event).all()]
+    ))
+    logging.debug("teacher:")
+    logging.debug("\n" + "\n".join(
+        [str(row) for row in session.query(db.teacher).all()]
+    ))
+    logging.debug("feedback:")
+    logging.debug("\n" + "\n".join(
+        [str(row) for row in session.query(db.feedback).all()]
+    ))
+
+
 class DBRequests:
     def __init__(self, engine):
         self.engine = engine
@@ -124,6 +157,7 @@ class DBRequests:
             text = Column(String)
             date = Column(DateTime)
             is_approved = Column(Boolean)
+            anonymously = Column(Boolean)
             votes = Column(Integer)
 
             student = relationship("Student", back_populates="student_feedbacks")
@@ -132,11 +166,11 @@ class DBRequests:
                 return (
                     "Feedback(id={}, title={}, student_id={},,"
                     " text={}, date={}, is_approved={},"
-                    " votes = {})") \
+                    " anonymously = {}, votes = {})") \
                     .format(
                     self.id, self.title, self.student_id,
                     self.text, self.date, self.is_approved,
-                    self.votes
+                    self.anonymously, self.votes
                 )
 
         class FeedbackEvent(base):
@@ -540,7 +574,7 @@ class DBRequests:
             raise RuntimeError("title {} doesn't exists".format(title))
         return feedback
 
-    def add_feedback(self, student, title, text, **kwargs):
+    def add_feedback(self, student, title, text, anonymously, **kwargs):
         if self.session.query(self.feedback).filter(
                 self.feedback.title == title
         ).first() is not None:
@@ -551,6 +585,7 @@ class DBRequests:
             text=text,
             date=datetime.datetime.now(),
             is_approved=False,
+            anonymously=anonymously,
             votes=0
         )
         if "teacher" in kwargs:

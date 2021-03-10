@@ -132,5 +132,6 @@ class FeedBack(StatesGroup):
     new_feedback_teacher = State()
     new_feedback_event = State()
     new_feedback_text = State()
+    new_feedback_anonymously = State()
 
     delete_feedback_confirm = State()

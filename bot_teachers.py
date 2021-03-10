@@ -123,12 +123,11 @@ class BotTeachers(BotBase):
         text = message.text
         async with state.proxy() as data:
             is_new_teacher = data['selected_teacher'] is None
-            teacher = None
-            if not is_new_teacher:
-                teacher = self.database.get_teacher(data['selected_teacher'])
+            teacher_name = data['selected_teacher']
         if text in self.database.get_teacher_name_list():
             await message.reply("Имя {} занято. Введите другое".format(text))
         elif not is_new_teacher:
+            teacher = self.database.get_teacher(teacher_name)
             teacher.name = text
             self.database.update_teacher(teacher)
             await state.finish()
@@ -151,10 +150,9 @@ class BotTeachers(BotBase):
         text = message.text
         async with state.proxy() as data:
             is_new_teacher = data['selected_teacher'] is None
-            teacher = None
-            if not is_new_teacher:
-                teacher = self.database.get_teacher(data['selected_teacher'])
+            teacher_name = data['selected_teacher']
         if not is_new_teacher:
+            teacher = self.database.get_teacher(teacher_name)
             teacher.email = text
             self.database.update_group(teacher)
             await state.finish()

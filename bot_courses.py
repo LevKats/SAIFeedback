@@ -46,10 +46,7 @@ class BotCourses(BotBase):
             self, message: types.Message, state: FSMContext
     ):
         text = message.text
-        student = self.database.get_student(
-            telegram_id=str(message.from_user.id)
-        )
-        telegram_id = student.telegram_id
+        telegram_id = str(message.from_user.id)
         descriptor = self.descriptors[telegram_id]
         if text == "←":
             try:
@@ -98,12 +95,12 @@ class BotCourses(BotBase):
             try:
                 async with state.proxy() as data:
                     event = self.database.get_event(text)
-                    data["event_to_delete"] = event
+                    data["event_to_delete"] = event.name
                 markup = types.ReplyKeyboardMarkup(
                     resize_keyboard=True, selective=True
                 )
                 try:
-                    self.database.get_student(
+                    student = self.database.get_student(
                         telegram_id=telegram_id
                     )
                     self.database.get_event(event.name)
@@ -148,7 +145,7 @@ class BotCourses(BotBase):
             try:
                 async with state.proxy() as data:
                     event = self.database.get_event(text)
-                    data["enrol_course"] = event
+                    data["enrol_course"] = event.name
                 markup = BotBase.yes_no_keyboard()
                 await Courses.enrol_course_confirm.set()
                 await message.reply("Вы уверены?", reply_markup=markup)
@@ -166,7 +163,7 @@ class BotCourses(BotBase):
                         self.database.get_student(
                             telegram_id=str(message.from_user.id)
                         ),
-                        data["event_to_delete"]
+                        self.database.get_event(data["event_to_delete"])
                     )
                     await state.finish()
                     await message.reply(
@@ -196,7 +193,7 @@ class BotCourses(BotBase):
                         self.database.get_student(
                             telegram_id=str(message.from_user.id)
                         ).telegram_id,
-                        data["enrol_course"].name
+                        data["enrol_course"]
                     )
                     await state.finish()
                     await message.reply(

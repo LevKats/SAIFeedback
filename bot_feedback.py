@@ -13,6 +13,8 @@ class BotFeedback(BotBase):
     permission = "user"
     func_name = "Отзывы"
 
+    MAX_TITLE_SYMBOLS = 50
+
     def __init__(self, database: DBRequests, descriptors: dict, dp):
         super().__init__(database, descriptors, dp)
         self.register_handlers()
@@ -20,6 +22,9 @@ class BotFeedback(BotBase):
     async def menu_select_activity_handler(
             self, message: types.Message, state: FSMContext
     ):
+        def approved_emoji(is_approved):
+            return '\u274c' if not is_approved else '\u2705'
+
         activity = message.text
         telegram_id = str(message.from_user.id)
         student = self.database.get_student(
@@ -29,7 +34,10 @@ class BotFeedback(BotBase):
             await FeedBack.select_feedback.set()
             descriptor = Descriptor(
                 self.database.feedbacks_generator(5, is_approved=True),
-                lambda row: row[0].title
+                lambda row: " ".join([
+                    approved_emoji(row[0].is_approved),
+                    row[0].title
+                ])
             )
             self.descriptors[telegram_id] = descriptor
             try:
@@ -48,6 +56,10 @@ class BotFeedback(BotBase):
         )
         telegram_id = student.telegram_id
         descriptor = self.descriptors[telegram_id]
+
+        def approved_emoji(is_approved):
+            return '\u274c' if not is_approved else '\u2705'
+
         if text == "←":
             try:
                 descriptor.prev()
@@ -70,7 +82,10 @@ class BotFeedback(BotBase):
         elif text == "Убрать фильтры":
             descriptor = Descriptor(
                 self.database.feedbacks_generator(5, is_approved=True),
-                lambda row: row[0].title
+                lambda row: " ".join([
+                    approved_emoji(row[0].is_approved),
+                    row[0].title
+                ])
             )
             self.descriptors[telegram_id] = descriptor
             try:
@@ -82,7 +97,10 @@ class BotFeedback(BotBase):
         elif text == "Показать мои отзывы":
             descriptor = Descriptor(
                 self.database.feedbacks_generator(5, student=student),
-                lambda row: row[0].title
+                lambda row: " ".join([
+                    approved_emoji(row[0].is_approved),
+                    row[0].title
+                ])
             )
             self.descriptors[telegram_id] = descriptor
             try:
@@ -95,7 +113,10 @@ class BotFeedback(BotBase):
                 student.permissions != "user":
             descriptor = Descriptor(
                 self.database.feedbacks_generator(5, is_approved=False),
-                lambda row: row[0].title
+                lambda row: " ".join([
+                    approved_emoji(row[0].is_approved),
+                    row[0].title
+                ])
             )
             self.descriptors[telegram_id] = descriptor
             try:
@@ -110,6 +131,7 @@ class BotFeedback(BotBase):
                     generator_row = descriptor[text]
                     feedback = generator_row[0]
                     data["selected_feedback"] = feedback.title
+                    feedback_name = data["selected_feedback"]
                 markup = types.ReplyKeyboardMarkup(
                     resize_keyboard=True, selective=True
                 )
@@ -117,7 +139,7 @@ class BotFeedback(BotBase):
                     self.database.get_student(
                         telegram_id=telegram_id
                     )
-                    self.database.get_feedback(data["selected_feedback"])
+                    self.database.get_feedback(feedback_name)
                 except RuntimeError:
                     return
                 if feedback.student_id == student.id or\
@@ -142,7 +164,8 @@ class BotFeedback(BotBase):
                                      "Голосов: {}\n"
                                      "Проверено модератором: {}").format(
                     feedback.title, feedback.date,
-                    get_exist_attr(generator_row[3], "nickname"),
+                    get_exist_attr(generator_row[3], "nickname")
+                    if not feedback.anonymously else "Скрыто",
                     get_exist_attr(generator_row[1], "name"),
                     get_exist_attr(generator_row[2], "name"),
                     feedback.text, feedback.votes, feedback.is_approved
@@ -161,7 +184,9 @@ class BotFeedback(BotBase):
         descriptor = self.descriptors[telegram_id]
 
         async with state.proxy() as data:
-            feedback = self.database.get_feedback(data["selected_feedback"])
+            feedback_name = data["selected_feedback"]
+
+        feedback = self.database.get_feedback(feedback_name)
 
         if (feedback.student_id == student.id or student.permissions != 'user')\
                 and text == "Удалить":
@@ -242,6 +267,14 @@ class BotFeedback(BotBase):
             self, message: types.Message, state: FSMContext
     ):
         text = message.text
+        if len(text) > BotFeedback.MAX_TITLE_SYMBOLS:
+            await message.reply(
+                ("Превышено максимальное количество"
+                 " символов в заголовке - {}/{}."
+                 "Попробуйте снова").format(
+                    len(text), BotFeedback.MAX_TITLE_SYMBOLS
+                ))
+            return
         try:
             student = self.database.get_student(
                 telegram_id=str(message.from_user.id)
@@ -362,8 +395,8 @@ class BotFeedback(BotBase):
             )
         else:
             try:
-                teacher = self.database.get_teacher(text)
                 async with state.proxy() as data:
+                    teacher = self.database.get_teacher(text)
                     data["teacher"] = teacher.name
                 await FeedBack.new_feedback_text.set()
                 await message.reply(
@@ -378,26 +411,41 @@ class BotFeedback(BotBase):
     ):
         text = message.text
         async with state.proxy() as data:
-            try:
-                kwargs = {}
-                if data['event'] is not None:
-                    kwargs['event'] = self.database.get_event(data['event'])
-                if data['teacher'] is not None:
-                    kwargs['teacher'] = self.database.get_teacher(
-                        data['teacher']
-                    )
-                self.database.add_feedback(
-                    self.database.get_student(nickname=data['student']),
-                    data['title'], text, **kwargs
-                )
-                success = True
-            except RuntimeError:
-                success = False
-            await state.finish()
+            data['text'] = text
+            await FeedBack.new_feedback_anonymously.set()
             await message.reply(
-                "Успех" if success else "Ошибка",
-                reply_markup=types.ReplyKeyboardRemove()
+                "Сделать анонимным?", reply_markup=BotBase.yes_no_keyboard()
             )
+
+    async def new_feedback_anonymously_handler(
+            self, message: types.Message, state: FSMContext
+    ):
+        text = message.text
+        if text not in ['Да', 'Нет']:
+            await message.reply('Неверная команда')
+        else:
+            anonymously = text == 'Да'
+            async with state.proxy() as data:
+                try:
+                    kwargs = {}
+                    if data['event'] is not None:
+                        kwargs['event'] = self.database.get_event(data['event'])
+                    if data['teacher'] is not None:
+                        kwargs['teacher'] = self.database.get_teacher(
+                            data['teacher']
+                        )
+                    self.database.add_feedback(
+                        self.database.get_student(nickname=data['student']),
+                        data['title'], data['text'], anonymously, **kwargs
+                    )
+                    success = True
+                except RuntimeError:
+                    success = False
+                await state.finish()
+                await message.reply(
+                    "Успех" if success else "Ошибка",
+                    reply_markup=types.ReplyKeyboardRemove()
+                )
 
     def register_handlers(self):
         self.dp.register_message_handler(
@@ -433,4 +481,8 @@ class BotFeedback(BotBase):
         self.dp.register_message_handler(
             self.new_feedback_text_handler,
             state=FeedBack.new_feedback_text
+        )
+        self.dp.register_message_handler(
+            self.new_feedback_anonymously_handler,
+            state=FeedBack.new_feedback_anonymously
         )

@@ -171,6 +171,7 @@ class BotGroups(BotBase):
                 async with state.proxy() as data:
                     event = self.database.get_event(text)
                     data['selected_event'] = event.name
+                    teacher_name = event.teacher.name
                 await EditGroups.delete_group_event_confirm.set()
                 await message.reply(
                     ("Имя: {}\n"
@@ -179,7 +180,7 @@ class BotGroups(BotBase):
                      "Преподаватель: {}\n"
                      "УДАЛИТЬ?").format(
                         event.name, event.date, event.is_regular,
-                        event.teacher.name),
+                        teacher_name),
                     reply_markup=BotBase.yes_no_keyboard()
                 )
             except RuntimeError:
@@ -274,12 +275,11 @@ class BotGroups(BotBase):
         text = message.text
         async with state.proxy() as data:
             is_new_group = data['selected_group'] is None
-            group = None
-            if not is_new_group:
-                group = self.database.get_group(data['selected_group'])
+            group_name = data['selected_group']
         if text in self.database.list_groups():
             await message.reply("Имя {} занято. Введите другое".format(text))
         elif not is_new_group:
+            group = self.database.get_group(group_name)
             group.name = text
             self.database.update_group(group)
             await state.finish()
@@ -302,10 +302,9 @@ class BotGroups(BotBase):
         text = message.text
         async with state.proxy() as data:
             is_new_group = data['selected_group'] is None
-            group = None
-            if not is_new_group:
-                group = self.database.get_group(data['selected_group'])
+            group_name = data['selected_group']
         if not is_new_group:
+            group = self.database.get_group(group_name)
             group.email = text
             self.database.update_group(group)
             await state.finish()
@@ -328,10 +327,9 @@ class BotGroups(BotBase):
         text = message.text
         async with state.proxy() as data:
             is_new_group = data['selected_group'] is None
-            group = None
-            if not is_new_group:
-                group = self.database.get_group(data['selected_group'])
+            group_name = data['selected_group']
         if not is_new_group:
+            group = self.database.get_group(group_name)
             group.monitor = text
             self.database.update_group(group)
             await state.finish()
