@@ -8,6 +8,8 @@ from db_requests import DBRequests
 from bot_utils import MainMenu
 from bot_utils import RegisterForm
 
+import logging
+
 
 class BotCore(BotBase):
     def __init__(self, token: str, database: DBRequests, admin_nickname, *args):
@@ -24,27 +26,37 @@ class BotCore(BotBase):
         super().__init__(
             database, descriptors, Dispatcher(self.bot, storage=self.storage)
         )
+        try:
+            self.database.add_group("DEFAULT", "email@example.com", "ADMIN")
+            logging.info("Group DEFAULT added")
+        except RuntimeError:
+            logging.info("Group DEFAULT existed")
+
         self.register_handlers()
 
         self.modules = []
-        self.main_menu_markup_user = types.ReplyKeyboardMarkup(
-            resize_keyboard=True, selective=True
-        )
-        self.main_menu_markup_moderator = types.ReplyKeyboardMarkup(
-            resize_keyboard=True, selective=True
-        )
 
+        self.main_menu_keyboards = {
+            "user": types.ReplyKeyboardMarkup(
+                resize_keyboard=True, selective=True
+            ),
+            "moderator": types.ReplyKeyboardMarkup(
+                resize_keyboard=True, selective=True
+            ),
+            "admin": types.ReplyKeyboardMarkup(
+                resize_keyboard=True, selective=True
+            ),
+        }
         permissions = {"user": 0, "moderator": 1, "admin": 2}
 
         for module in args:
             priority = permissions[module.permission]
-            if priority >= permissions['moderator']:
-                self.main_menu_markup_moderator.add(module.func_name)
-            if priority >= permissions['user']:
-                self.main_menu_markup_user.add(module.func_name)
+            for permission in self.main_menu_keyboards:
+                if priority <= permissions[permission]:
+                    self.main_menu_keyboards[permission].add(module.func_name)
             self.modules.append(module(database, descriptors, self.dp))
-        self.main_menu_markup_user.add("Помощь")
-        self.main_menu_markup_moderator.add("Помощь")
+        for permission in self.main_menu_keyboards:
+            self.main_menu_keyboards[permission].add("Помощь")
 
     async def start_handler(self, message: types.Message):
         telegram_id = str(message.from_user.id)
@@ -173,10 +185,7 @@ class BotCore(BotBase):
                 "Используйте /help", reply_markup=types.ReplyKeyboardRemove()
             )
         else:
-            if student.permissions == 'user':
-                markup = self.main_menu_markup_user
-            else:
-                markup = self.main_menu_markup_moderator
+            markup = self.main_menu_keyboards[student.permissions]
             await message.reply(
                 "Неверное действие. Попробуйте еще раз",
                 reply_markup=markup
@@ -193,10 +202,7 @@ class BotCore(BotBase):
                 "Бот пока с не знаком с Вами. Используйте /start"
             )
             return
-        if student.permissions == 'user':
-            markup = self.main_menu_markup_user
-        else:
-            markup = self.main_menu_markup_moderator
+        markup = self.main_menu_keyboards[student.permissions]
         await MainMenu.select_activity.set()
         await message.reply("Главное меню", reply_markup=markup)
 

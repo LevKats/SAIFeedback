@@ -8,6 +8,7 @@ from bot_feedback import BotFeedback
 from bot_groups import BotGroups
 from bot_events import BotEvents
 from bot_teachers import BotTeachers
+from bot_moderators import BotModerators
 
 import logging
 from os import environ
@@ -17,14 +18,17 @@ if __name__ == '__main__':
     engine = create_engine('sqlite:///sai.db', echo=False)
     db = DBRequests(engine)
     # debug_output(db)
-    if "332" not in db.list_groups():
-        db.add_group("332", "astromsu@", "Nastya")
+    try:
+        db.add_group("DEFAULT", "email@example.com", "ADMIN")
+    except RuntimeError:
+        pass
     if "ADMIN" not in db.list_students_names():
-        db.add_student("ADMIN", environ["ADMIN_ID"], "332", "admin")
+        db.add_student("ADMIN", environ["ADMIN_ID"], "DEFAULT", "admin")
 
     bot = BotCore(
         environ["API_TOKEN"], db, environ["ADMIN_TELEGRAM"],
         BotProfile, BotCourses, BotFeedback,
-        BotGroups, BotEvents, BotTeachers
+        BotGroups, BotEvents, BotTeachers,
+        BotModerators
     )
     bot.start_polling()

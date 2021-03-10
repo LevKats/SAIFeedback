@@ -442,9 +442,14 @@ class DBRequests:
     def update_student(self, new_student):
         self.session.commit()
 
-    def list_students_names(self):
+    def list_students_names(self, **kwargs):
+        query = self.session.query(self.student)
+        if "permissions" in kwargs:
+            query = query.filter(
+                self.student.permissions == kwargs["permissions"]
+            )
         return [
-            row.nickname for row in self.session.query(self.student).all()
+            row.nickname for row in query.all()
         ]
 
     def add_pearson_event(self, student_telegram_id, event_name):

@@ -92,6 +92,13 @@ class EditEvents(StatesGroup):
     delete_event_confirm = State()
 
 
+class EditModerators(StatesGroup):
+    select_moderator = State()
+    moderator_activity = State()
+    new_moderator_nickname = State()
+    delete_moderator_confirm = State()
+
+
 class MainMenu(StatesGroup):
     select_activity = State()
     courses = State()
