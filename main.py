@@ -15,7 +15,10 @@ from os import environ
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
-    engine = create_engine('sqlite:///sai.db', echo=False)
+    if "DATABASE_URL" not in environ:
+        engine = create_engine('sqlite:///sai.db', echo=False)
+    else:
+        engine = create_engine(environ['DATABASE_URL'], echo=False)
     db = DBRequests(engine)
     # debug_output(db)
     try:
