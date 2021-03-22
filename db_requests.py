@@ -2,6 +2,7 @@ from sqlalchemy import ForeignKey, Column, Integer, String, DateTime, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 from sqlalchemy import or_
+from sqlalchemy import desc
 import datetime
 import logging
 
@@ -643,7 +644,7 @@ class DBRequests:
             query = query.filter(
                 self.feedback.is_approved == kwargs["is_approved"]
             )
-        for row in query.all():
+        for row in query.order_by(desc(self.feedback.date)).all():
             batch.append(row)
             if len(batch) == batch_num:
                 yield batch
