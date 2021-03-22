@@ -11,7 +11,7 @@ from db_requests import DBRequests
 
 class BotModerators(BotBase):
     permission = "admin"
-    func_name = "Группы"
+    func_name = "Модераторы"
 
     def __init__(self, database: DBRequests, descriptors: dict, dp):
         super().__init__(database, descriptors, dp)
@@ -109,7 +109,7 @@ class BotModerators(BotBase):
             self.database.update_student(moderator)
             await state.finish()
             await message.reply(
-                "Успех", reply_markup=types.ReplyKeyboardRemove()
+                "Успех", reply_markup=BotBase.none_state_keyboard()
             )
         except RuntimeError:
             await message.reply("Неверное имя. Попробуйте еще")
@@ -146,17 +146,17 @@ class BotModerators(BotBase):
                 self.database.update_student(moderator)
                 await state.finish()
                 await message.reply(
-                    "Успех", reply_markup=types.ReplyKeyboardRemove()
+                    "Успех", reply_markup=BotBase.none_state_keyboard()
                 )
             except RuntimeError:
                 await state.finish()
                 await message.reply(
-                    "Ошибка", reply_markup=types.ReplyKeyboardRemove()
+                    "Ошибка", reply_markup=BotBase.none_state_keyboard()
                 )
         elif text == 'Нет':
             await state.finish()
             await message.reply(
-                "Отмена", reply_markup=types.ReplyKeyboardRemove()
+                "Отмена", reply_markup=BotBase.none_state_keyboard()
             )
         else:
             await message.reply("Неизвестная команда")

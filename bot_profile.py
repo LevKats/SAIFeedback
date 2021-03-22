@@ -30,8 +30,11 @@ class BotProfile(BotBase):
                 ("Ваш профиль:\n"
                  "Имя: {}\n"
                  "Группа: {}\n"
+                 "- Контакт старосты: {}\n"
+                 "- email: {}\n"
                  "telegram id: {}").format(
                     student.nickname, student.group.name,
+                    student.group.monitor, student.group.email,
                     student.telegram_id
                 ),
                 reply_markup=BotBase.profile_keyboard()
@@ -74,7 +77,7 @@ class BotProfile(BotBase):
             if new_nickname in self.database.list_students_names():
                 await state.finish()
                 await message.reply(
-                    "Ошибка", reply_markup=types.ReplyKeyboardRemove()
+                    "Ошибка", reply_markup=BotBase.none_state_keyboard()
                 )
             else:
                 try:
@@ -85,17 +88,17 @@ class BotProfile(BotBase):
                     self.database.update_student(student)
                     await state.finish()
                     await message.reply(
-                        "Успех", reply_markup=types.ReplyKeyboardRemove()
+                        "Успех", reply_markup=BotBase.none_state_keyboard()
                     )
                 except RuntimeError:
                     await state.finish()
                     await message.reply(
-                        "Ошибка", reply_markup=types.ReplyKeyboardRemove()
+                        "Ошибка", reply_markup=BotBase.none_state_keyboard()
                     )
         elif text == "Нет":
             await state.finish()
             await message.reply(
-                "Отмена", reply_markup=types.ReplyKeyboardRemove()
+                "Отмена", reply_markup=BotBase.none_state_keyboard()
             )
         else:
             await message.reply("Неверная команда")
@@ -126,17 +129,17 @@ class BotProfile(BotBase):
                 )
                 await state.finish()
                 await message.reply(
-                    "Удалено", reply_markup=types.ReplyKeyboardRemove()
+                    "Удалено", reply_markup=BotBase.none_state_keyboard()
                 )
             except RuntimeError:
                 await state.finish()
                 await message.reply(
-                    "Ощибка", reply_markup=types.ReplyKeyboardRemove()
+                    "Ошибка", reply_markup=BotBase.none_state_keyboard()
                 )
         elif text == "Нет":
             await state.finish()
             await message.reply(
-                "Отмена", reply_markup=types.ReplyKeyboardRemove()
+                "Отмена", reply_markup=BotBase.none_state_keyboard()
             )
         else:
             await message.reply("Неверная команда")

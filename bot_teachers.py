@@ -95,7 +95,7 @@ class BotTeachers(BotBase):
         ).permissions == 'user':
             await state.finish()
             await message.reply(
-                "Ошибка", reply_markup=types.ReplyKeyboardRemove()
+                "Ошибка", reply_markup=BotBase.none_state_keyboard()
             )
         elif text == "Сменить имя":
             await EditTeachers.new_teacher_name.set()
@@ -133,7 +133,7 @@ class BotTeachers(BotBase):
             await state.finish()
             await message.reply(
                 "Успех",
-                reply_markup=types.ReplyKeyboardRemove()
+                reply_markup=BotBase.none_state_keyboard()
             )
         else:
             async with state.proxy() as data:
@@ -158,7 +158,7 @@ class BotTeachers(BotBase):
             await state.finish()
             await message.reply(
                 "Успех",
-                reply_markup=types.ReplyKeyboardRemove()
+                reply_markup=BotBase.none_state_keyboard()
             )
         else:
             async with state.proxy() as data:
@@ -173,12 +173,12 @@ class BotTeachers(BotBase):
             if success:
                 await message.reply(
                     "Успех",
-                    reply_markup=types.ReplyKeyboardRemove()
+                    reply_markup=BotBase.none_state_keyboard()
                 )
             else:
                 await message.reply(
                     "Ошибка",
-                    reply_markup=types.ReplyKeyboardRemove()
+                    reply_markup=BotBase.none_state_keyboard()
                 )
 
     async def delete_teacher_confirm_handler(
@@ -194,17 +194,17 @@ class BotTeachers(BotBase):
                 )
                 await state.finish()
                 await message.reply(
-                    "Успех", reply_markup=types.ReplyKeyboardRemove()
+                    "Успех", reply_markup=BotBase.none_state_keyboard()
                 )
             except RuntimeError:
                 await state.finish()
                 await message.reply(
-                    "Ошибка", reply_markup=types.ReplyKeyboardRemove()
+                    "Ошибка", reply_markup=BotBase.none_state_keyboard()
                 )
         elif text == 'Нет':
             await state.finish()
             await message.reply(
-                "Отмена", reply_markup=types.ReplyKeyboardRemove()
+                "Отмена", reply_markup=BotBase.none_state_keyboard()
             )
         else:
             await message.reply("Неизвестная команда")

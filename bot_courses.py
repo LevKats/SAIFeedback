@@ -167,20 +167,20 @@ class BotCourses(BotBase):
                     )
                     await state.finish()
                     await message.reply(
-                        "Удаление", reply_markup=types.ReplyKeyboardRemove()
+                        "Удаление", reply_markup=BotBase.none_state_keyboard()
                     )
                 except RuntimeError:
                     await state.finish()
                     await message.reply(
-                        "Ошибка", reply_markup=types.ReplyKeyboardRemove()
+                        "Ошибка", reply_markup=BotBase.none_state_keyboard()
                     )
         elif text == "Нет":
             await state.finish()
             await message.reply(
-                "Отмена удаления", reply_markup=types.ReplyKeyboardRemove()
+                "Отмена удаления", reply_markup=BotBase.none_state_keyboard()
             )
         else:
-            await message.reply("Неверный вариент")
+            await message.reply("Неверный вариант")
 
     async def enrol_course_confirm_handler(
             self, message: types.Message, state: FSMContext
@@ -197,20 +197,20 @@ class BotCourses(BotBase):
                     )
                     await state.finish()
                     await message.reply(
-                        "Успех", reply_markup=types.ReplyKeyboardRemove()
+                        "Успех", reply_markup=BotBase.none_state_keyboard()
                     )
                 except RuntimeError:
                     await state.finish()
                     await message.reply(
-                        "Ошибка", reply_markup=types.ReplyKeyboardRemove()
+                        "Ошибка", reply_markup=BotBase.none_state_keyboard()
                     )
         elif text == "Нет":
             await state.finish()
             await message.reply(
-                "Отмена записи", reply_markup=types.ReplyKeyboardRemove()
+                "Отмена записи", reply_markup=BotBase.none_state_keyboard()
             )
         else:
-            await message.reply("Неверный вариент")
+            await message.reply("Неверный вариант")
 
     def register_handlers(self):
         self.dp.register_message_handler(

@@ -103,7 +103,7 @@ class BotEvents(BotBase):
             await state.finish()
             await message.reply(
                 "Ошибка",
-                reply_markup=types.ReplyKeyboardRemove()
+                reply_markup=BotBase.none_state_keyboard()
             )
         elif text == "Сменить имя":
             await EditEvents.new_event_name.set()
@@ -162,7 +162,7 @@ class BotEvents(BotBase):
             await state.finish()
             await message.reply(
                 "Успех",
-                reply_markup=types.ReplyKeyboardRemove()
+                reply_markup=BotBase.none_state_keyboard()
             )
         else:
             async with state.proxy() as data:
@@ -193,7 +193,7 @@ class BotEvents(BotBase):
                 await state.finish()
                 await message.reply(
                     "Успех",
-                    reply_markup=types.ReplyKeyboardRemove()
+                    reply_markup=BotBase.none_state_keyboard()
                 )
             else:
                 await EditEvents.new_event_is_regular.set()
@@ -220,7 +220,7 @@ class BotEvents(BotBase):
             await state.finish()
             await message.reply(
                 "Успех",
-                reply_markup=types.ReplyKeyboardRemove()
+                reply_markup=BotBase.none_state_keyboard()
             )
         else:
             async with state.proxy() as data:
@@ -280,12 +280,12 @@ class BotEvents(BotBase):
                     if success:
                         await message.reply(
                             "Успех",
-                            reply_markup=types.ReplyKeyboardRemove()
+                            reply_markup=BotBase.none_state_keyboard()
                         )
                     else:
                         await message.reply(
                             "Ошибка",
-                            reply_markup=types.ReplyKeyboardRemove()
+                            reply_markup=BotBase.none_state_keyboard()
                         )
                 else:
                     async with state.proxy() as data:
@@ -299,7 +299,7 @@ class BotEvents(BotBase):
                     await state.finish()
                     await message.reply(
                         "Успех",
-                        reply_markup=types.ReplyKeyboardRemove()
+                        reply_markup=BotBase.none_state_keyboard()
                     )
             except RuntimeError:
                 await message.reply("Неверная команда")
@@ -317,17 +317,17 @@ class BotEvents(BotBase):
                 )
                 await state.finish()
                 await message.reply(
-                    "Успех", reply_markup=types.ReplyKeyboardRemove()
+                    "Успех", reply_markup=BotBase.none_state_keyboard()
                 )
             except RuntimeError:
                 await state.finish()
                 await message.reply(
-                    "Ошибка", reply_markup=types.ReplyKeyboardRemove()
+                    "Ошибка", reply_markup=BotBase.none_state_keyboard()
                 )
         elif text == 'Нет':
             await state.finish()
             await message.reply(
-                "Отмена", reply_markup=types.ReplyKeyboardRemove()
+                "Отмена", reply_markup=BotBase.none_state_keyboard()
             )
         else:
             await message.reply("Неизвестная команда")

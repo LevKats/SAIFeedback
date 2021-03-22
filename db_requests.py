@@ -116,6 +116,7 @@ class DBRequests:
             id = Column(Integer, primary_key=True)
             nickname = Column(String)
             telegram_id = Column(String)
+            chat_id = Column(String)
             group_id = Column(Integer, ForeignKey('groups.id'))
             permissions = Column(String)
 
@@ -123,10 +124,10 @@ class DBRequests:
 
             def __str__(self):
                 return (
-                    "Student(id={}, nickname={}, telegram_id={},"
+                    "Student(id={}, nickname={}, telegram_id={}, chat_id={},"
                     " group_id={}, permission={})")\
                     .format(
-                    self.id, self.nickname, self.telegram_id, self.group_id,
+                    self.id, self.nickname, self.telegram_id, self.chat_id, self.group_id,
                     self.permissions
                 )
 

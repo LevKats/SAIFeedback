@@ -71,7 +71,7 @@ class BotGroups(BotBase):
         ).permissions == 'user':
             await state.finish()
             await message.reply(
-                "Ошибка", reply_markup=types.ReplyKeyboardRemove()
+                "Ошибка", reply_markup=BotBase.none_state_keyboard()
             )
         elif text == "Сменить имя":
             await EditGroups.new_group_name.set()
@@ -107,7 +107,7 @@ class BotGroups(BotBase):
             except RuntimeError:
                 await state.finish()
                 await message.reply(
-                    "Ошибка", reply_markup=types.ReplyKeyboardRemove()
+                    "Ошибка", reply_markup=BotBase.none_state_keyboard()
                 )
                 return
             telegram_id = str(message.from_user.id)
@@ -155,7 +155,7 @@ class BotGroups(BotBase):
             except RuntimeError:
                 await state.finish()
                 await message.reply(
-                    "Ошибка", reply_markup=types.ReplyKeyboardRemove()
+                    "Ошибка", reply_markup=BotBase.none_state_keyboard()
                 )
                 return
             telegram_id = str(message.from_user.id)
@@ -187,7 +187,7 @@ class BotGroups(BotBase):
                 await state.finish()
                 await message.reply(
                     "Ошибка",
-                    reply_markup=types.ReplyKeyboardRemove()
+                    reply_markup=BotBase.none_state_keyboard()
                 )
 
     async def add_group_event_select_handler(
@@ -219,13 +219,13 @@ class BotGroups(BotBase):
                 await state.finish()
                 await message.reply(
                     "Успех",
-                    reply_markup=types.ReplyKeyboardRemove()
+                    reply_markup=BotBase.none_state_keyboard()
                 )
             except RuntimeError:
                 await state.finish()
                 await message.reply(
                     "Ошибка",
-                    reply_markup=types.ReplyKeyboardRemove()
+                    reply_markup=BotBase.none_state_keyboard()
                 )
 
     async def delete_group_event_confirm_handler(
@@ -238,7 +238,7 @@ class BotGroups(BotBase):
             await state.finish()
             await message.reply(
                 "Ошибка",
-                reply_markup=types.ReplyKeyboardRemove()
+                reply_markup=BotBase.none_state_keyboard()
             )
         elif text == 'Да':
             try:
@@ -250,19 +250,19 @@ class BotGroups(BotBase):
                 await state.finish()
                 await message.reply(
                     "Успех",
-                    reply_markup=types.ReplyKeyboardRemove()
+                    reply_markup=BotBase.none_state_keyboard()
                 )
             except RuntimeError:
                 await state.finish()
                 await message.reply(
                     "Ошибка",
-                    reply_markup=types.ReplyKeyboardRemove()
+                    reply_markup=BotBase.none_state_keyboard()
                 )
         elif text == 'Нет':
             await state.finish()
             await message.reply(
                 "ОК",
-                reply_markup=types.ReplyKeyboardRemove()
+                reply_markup=BotBase.none_state_keyboard()
             )
         else:
             await message.reply(
@@ -285,7 +285,7 @@ class BotGroups(BotBase):
             await state.finish()
             await message.reply(
                 "Успех",
-                reply_markup=types.ReplyKeyboardRemove()
+                reply_markup=BotBase.none_state_keyboard()
             )
         else:
             async with state.proxy() as data:
@@ -310,7 +310,7 @@ class BotGroups(BotBase):
             await state.finish()
             await message.reply(
                 "Успех",
-                reply_markup=types.ReplyKeyboardRemove()
+                reply_markup=BotBase.none_state_keyboard()
             )
         else:
             async with state.proxy() as data:
@@ -335,7 +335,7 @@ class BotGroups(BotBase):
             await state.finish()
             await message.reply(
                 "Успех",
-                reply_markup=types.ReplyKeyboardRemove()
+                reply_markup=BotBase.none_state_keyboard()
             )
         else:
             async with state.proxy() as data:
@@ -350,12 +350,12 @@ class BotGroups(BotBase):
             if success:
                 await message.reply(
                     "Успех",
-                    reply_markup=types.ReplyKeyboardRemove()
+                    reply_markup=BotBase.none_state_keyboard()
                 )
             else:
                 await message.reply(
                     "Ошибка",
-                    reply_markup=types.ReplyKeyboardRemove()
+                    reply_markup=BotBase.none_state_keyboard()
                 )
 
     async def delete_group_confirm_handler(
@@ -371,17 +371,17 @@ class BotGroups(BotBase):
                 )
                 await state.finish()
                 await message.reply(
-                    "Успех", reply_markup=types.ReplyKeyboardRemove()
+                    "Успех", reply_markup=BotBase.none_state_keyboard()
                 )
             except RuntimeError:
                 await state.finish()
                 await message.reply(
-                    "Ошибка", reply_markup=types.ReplyKeyboardRemove()
+                    "Ошибка", reply_markup=BotBase.none_state_keyboard()
                 )
         elif text == 'Нет':
             await state.finish()
             await message.reply(
-                "Отмена", reply_markup=types.ReplyKeyboardRemove()
+                "Отмена", reply_markup=BotBase.none_state_keyboard()
             )
         else:
             await message.reply("Неизвестная команда")

@@ -16,6 +16,13 @@ class BotFeedback(BotBase):
     MAX_TITLE_SYMBOLS = 50
 
     def __init__(self, database: DBRequests, descriptors: dict, dp):
+        self.states_list = [
+            "заголовок",
+            "событие (опционально)",
+            "учитель (опционально)",
+            "текст",
+            "анонимно?"
+        ]
         super().__init__(database, descriptors, dp)
         self.register_handlers()
 
@@ -77,7 +84,8 @@ class BotFeedback(BotBase):
         elif text == "Написать новый отзыв":
             await FeedBack.new_feedback_title.set()
             await message.reply(
-                "Введите заголовок", reply_markup=types.ReplyKeyboardRemove()
+                "Введите заголовок\n" + BotBase.state_description(self.states_list, 0),
+                reply_markup=types.ReplyKeyboardRemove()
             )
         elif text == "Убрать фильтры":
             descriptor = Descriptor(
@@ -210,12 +218,12 @@ class BotFeedback(BotBase):
                 self.database.update_feedback(feedback)
                 await state.finish()
                 await message.reply(
-                    "Успех", reply_markup=types.ReplyKeyboardRemove()
+                    "Успех", reply_markup=BotBase.none_state_keyboard()
                 )
             except RuntimeError:
                 await state.finish()
                 await message.reply(
-                    "Ошибка", reply_markup=types.ReplyKeyboardRemove()
+                    "Ошибка", reply_markup=BotBase.none_state_keyboard()
                 )
         elif text == "ОК":
             markup = BotBase.select_feedback_keyboard(descriptor, student)
@@ -245,20 +253,20 @@ class BotFeedback(BotBase):
                         self.database.get_feedback(feedback.title)
                     )
                     await message.reply(
-                        "Удалено", reply_markup=types.ReplyKeyboardRemove()
+                        "Удалено", reply_markup=BotBase.none_state_keyboard()
                     )
                 except RuntimeError:
                     await message.reply(
-                        "Ошибка", reply_markup=types.ReplyKeyboardRemove()
+                        "Ошибка", reply_markup=BotBase.none_state_keyboard()
                     )
             else:
                 await message.reply(
-                    "Ошибка", reply_markup=types.ReplyKeyboardRemove()
+                    "Ошибка", reply_markup=BotBase.none_state_keyboard()
                 )
         elif text == "Нет":
             await state.finish()
             await message.reply(
-                "Отмена", reply_markup=types.ReplyKeyboardRemove()
+                "Отмена", reply_markup=BotBase.none_state_keyboard()
             )
         else:
             await message.reply("Неверная команда")
@@ -302,7 +310,10 @@ class BotFeedback(BotBase):
             markup = BotBase.select_common_keyboard(descriptor)
             markup.add("Пропустить")
             await FeedBack.new_feedback_event.set()
-            await message.reply("Мероприятия", reply_markup=markup)
+            await message.reply(
+                "Мероприятия\n" + BotBase.state_description(self.states_list, 1),
+                reply_markup=markup
+            )
 
     async def new_feedback_event_handler(
             self, message: types.Message, state: FSMContext
@@ -341,7 +352,10 @@ class BotFeedback(BotBase):
                 pass
             markup = BotBase.select_common_keyboard(descriptor)
             markup.add("Пропустить")
-            await message.reply("Преподаватели", reply_markup=markup)
+            await message.reply(
+                "Преподаватели\n" + BotBase.state_description(self.states_list, 2),
+                reply_markup=markup
+            )
         else:
             try:
                 event = self.database.get_event(text)
@@ -359,7 +373,10 @@ class BotFeedback(BotBase):
                     pass
                 markup = BotBase.select_common_keyboard(descriptor)
                 markup.add("Пропустить")
-                await message.reply("Преподаватели", reply_markup=markup)
+                await message.reply(
+                    "Преподаватели\n" + BotBase.state_description(self.states_list, 2),
+                    reply_markup=markup
+                )
             except RuntimeError:
                 await message.reply("Неверная команда")
 
@@ -376,7 +393,7 @@ class BotFeedback(BotBase):
                 pass
             markup = BotBase.select_common_keyboard(descriptor)
             markup.add("Пропустить")
-            await message.reply("Мероприятия", reply_markup=markup)
+            await message.reply("Преподаватели", reply_markup=markup)
         elif text == "→":
             try:
                 descriptor.next()
@@ -384,13 +401,13 @@ class BotFeedback(BotBase):
                 pass
             markup = BotBase.select_common_keyboard(descriptor)
             markup.add("Пропустить")
-            await message.reply("Мероприятия", reply_markup=markup)
+            await message.reply("Преподаватели", reply_markup=markup)
         elif text == 'Пропустить':
             async with state.proxy() as data:
                 data["teacher"] = None
             await FeedBack.new_feedback_text.set()
             await message.reply(
-                "Введите текст отзыва",
+                "Введите текст отзыва\n" + BotBase.state_description(self.states_list, 3),
                 reply_markup=types.ReplyKeyboardRemove()
             )
         else:
@@ -400,7 +417,7 @@ class BotFeedback(BotBase):
                     data["teacher"] = teacher.name
                 await FeedBack.new_feedback_text.set()
                 await message.reply(
-                    "Введите текст отзыва",
+                    "Введите текст отзыва\n" + BotBase.state_description(self.states_list, 3),
                     reply_markup=types.ReplyKeyboardRemove()
                 )
             except RuntimeError:
@@ -414,7 +431,8 @@ class BotFeedback(BotBase):
             data['text'] = text
             await FeedBack.new_feedback_anonymously.set()
             await message.reply(
-                "Сделать анонимным?", reply_markup=BotBase.yes_no_keyboard()
+                "Сделать анонимным?\n" + BotBase.state_description(self.states_list, 4),
+                reply_markup=BotBase.yes_no_keyboard()
             )
 
     async def new_feedback_anonymously_handler(
@@ -444,7 +462,7 @@ class BotFeedback(BotBase):
                 await state.finish()
                 await message.reply(
                     "Успех" if success else "Ошибка",
-                    reply_markup=types.ReplyKeyboardRemove()
+                    reply_markup=BotBase.none_state_keyboard()
                 )
 
     def register_handlers(self):

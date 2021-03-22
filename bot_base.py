@@ -15,6 +15,18 @@ class BotBase(object):
     def register_handlers(self):
         pass
 
+    @staticmethod
+    def state_description(lst, index_now):
+        rows = ["", "Прогресс:"]
+        for i, state in enumerate(lst):
+            if i == index_now:
+                rows.append('\u27a1' + ' ' + state)
+            elif i < index_now:
+                rows.append('\u2705' + " " + state)
+            else:
+                rows.append('\u274c' + " " + state)
+        return "\n".join(rows)
+
     def group_selection_keyboard(self, not_in_the_list="Нет в списке"):
         markup = types.ReplyKeyboardMarkup(
             resize_keyboard=True, selective=True
@@ -68,6 +80,14 @@ class BotBase(object):
             resize_keyboard=True, selective=True
         )
         markup.add("Да", "Нет")
+        return markup
+
+    @staticmethod
+    def none_state_keyboard():
+        markup = types.ReplyKeyboardMarkup(
+            resize_keyboard=True, selective=True
+        )
+        markup.add("/menu", "/help")
         return markup
 
     @staticmethod

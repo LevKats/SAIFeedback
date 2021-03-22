@@ -21,6 +21,10 @@ class BotCore(BotBase):
         self.storage = MemoryStorage()
         self.admin_nickname = admin_nickname
 
+        self.states_list = [
+            "никнейм", "группа"
+        ]
+
         descriptors = {}
 
         super().__init__(
@@ -64,13 +68,14 @@ class BotCore(BotBase):
             student = self.database.get_student(telegram_id=telegram_id)
             await message.reply(
                 ("Здравствуйте, {}!\n"
-                 "Ипользуйте /help если не знаете, что делать"
+                 "Используйте /help если не знаете, что делать"
                  ).format(student.nickname))
             # Set state
         except RuntimeError:
             await RegisterForm.nickname.set()
             await message.reply(
-                "Здравствуйте! Как к Вам обращаться (nickname)?"
+                "Здравствуйте! Как к Вам обращаться (nickname)?\n" +
+                BotBase.state_description(self.states_list, 0)
             )
 
     async def help_handler(self, message: types.Message, state: FSMContext):
@@ -84,12 +89,14 @@ class BotCore(BotBase):
                  "Используйте /start для начала общения с ботом\n"
                  "Используйте /menu для открытия меню").format(
                     student.nickname
-                )
+                ),
+                reply_markup=BotBase.none_state_keyboard()
             )
         except RuntimeError:
             await message.reply(
                 ("Используйте /start для начала общения с ботом\n"
-                 "Используйте /menu для открытия меню")
+                 "Используйте /menu для открытия меню"),
+                reply_markup=BotBase.none_state_keyboard()
             )
 
     async def nickname_handler(
@@ -108,6 +115,9 @@ class BotCore(BotBase):
             self.database.add_student(
                 nickname, telegram_id, "DEFAULT", "user"
             )
+            student = self.database.get_student(nickname=nickname)
+            student.chat_id = message.chat.id
+            self.database.update_student(student)
             async with state.proxy() as data:
                 data['telegram_id'] = telegram_id
                 data['nickname'] = nickname
@@ -115,9 +125,10 @@ class BotCore(BotBase):
 
             markup = self.group_selection_keyboard()
             await message.reply(
-                "Приятно познакомиться, {}! В какой вы группе?".format(
+                "Приятно познакомиться, {}! В какой вы группе?\n".format(
                     nickname
-                ), reply_markup=markup
+                ) + BotBase.state_description(self.states_list, 1),
+                reply_markup=markup
             )
 
     async def group_handler(
@@ -136,7 +147,7 @@ class BotCore(BotBase):
                 # await MainMenu.select_activity.set()
                 await message.reply(
                     "Установлена группа {}".format(group),
-                    reply_markup=types.ReplyKeyboardRemove()
+                    reply_markup=BotBase.none_state_keyboard()
                 )
             elif group == "Нет в списке":
                 student = self.database.get_student(
@@ -150,7 +161,7 @@ class BotCore(BotBase):
                          " измените группу в своем профиле позже").format(
                             self.admin_nickname
                         ),
-                        reply_markup=types.ReplyKeyboardRemove()
+                        reply_markup=BotBase.none_state_keyboard()
                     )
                 else:
                     await state.finish()
@@ -158,7 +169,7 @@ class BotCore(BotBase):
                         ("Пока Вам назначена группа по умолчанию."
                          " Добавьте новую группу и"
                          " измените группу в своем профиле позже"),
-                        reply_markup=types.ReplyKeyboardRemove()
+                        reply_markup=BotBase.none_state_keyboard()
                     )
             else:
                 markup = self.group_selection_keyboard()
@@ -182,7 +193,7 @@ class BotCore(BotBase):
         if message.text == "Помощь":
             await state.finish()
             await message.reply(
-                "Используйте /help", reply_markup=types.ReplyKeyboardRemove()
+                "Используйте /help", reply_markup=BotBase.none_state_keyboard()
             )
         else:
             markup = self.main_menu_keyboards[student.permissions]
