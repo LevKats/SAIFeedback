@@ -245,7 +245,10 @@ class BotFeedback(BotBase):
                 )
         elif student.permissions != 'user' and text == "Написать автору":
             await FeedBack.enter_message_to_author.set()
-            await message.reply("Введите сообщение автору отзыва")
+            await message.reply(
+                "Введите сообщение автору отзыва",
+                reply_markup=types.ReplyKeyboardRemove()
+            )
         elif text == "ОК":
             markup = BotBase.select_feedback_keyboard(descriptor, student)
             await FeedBack.select_feedback.set()
