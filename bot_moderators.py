@@ -13,8 +13,8 @@ class BotModerators(BotBase):
     permission = "admin"
     func_name = "Модераторы"
 
-    def __init__(self, database: DBRequests, descriptors: dict, dp):
-        super().__init__(database, descriptors, dp)
+    def __init__(self, database: DBRequests, descriptors: dict, dp, bot):
+        super().__init__(database, descriptors, dp, bot)
         self.register_handlers()
 
     async def menu_select_activity_handler(

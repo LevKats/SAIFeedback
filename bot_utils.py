@@ -141,4 +141,6 @@ class FeedBack(StatesGroup):
     new_feedback_text = State()
     new_feedback_anonymously = State()
 
+    enter_message_to_author = State()
+
     delete_feedback_confirm = State()

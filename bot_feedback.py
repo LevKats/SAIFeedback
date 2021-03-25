@@ -15,7 +15,7 @@ class BotFeedback(BotBase):
 
     MAX_TITLE_SYMBOLS = 50
 
-    def __init__(self, database: DBRequests, descriptors: dict, dp):
+    def __init__(self, database: DBRequests, descriptors: dict, dp, bot):
         self.states_list = [
             "заголовок",
             "событие (опционально)",
@@ -23,7 +23,7 @@ class BotFeedback(BotBase):
             "текст",
             "анонимно?"
         ]
-        super().__init__(database, descriptors, dp)
+        super().__init__(database, descriptors, dp, bot)
         self.register_handlers()
 
     async def menu_select_activity_handler(
@@ -144,17 +144,23 @@ class BotFeedback(BotBase):
                     resize_keyboard=True, selective=True
                 )
                 try:
-                    self.database.get_student(
+                    student = self.database.get_student(
                         telegram_id=telegram_id
                     )
-                    self.database.get_feedback(feedback_name)
+                    feedback = self.database.get_feedback(feedback_name)
                 except RuntimeError:
                     return
+                has_like = self.database.feedback_has_like(
+                    telegram_id, feedback.title
+                )
+                like_symbol = '\u2764' if has_like else '\U0001f5a4'
                 if feedback.student_id == student.id or\
                         student.permissions != 'user':
                     markup.add("Удалить")
                 if student.permissions != 'user' and not feedback.is_approved:
                     markup.add("Одобрить")
+                if student.permissions != 'user':
+                    markup.add("Написать автору")
                 if feedback.is_approved:
                     markup.add("Проголосовать")
                 markup.add("ОК")
@@ -170,13 +176,15 @@ class BotFeedback(BotBase):
                                      "На Преподавателя {}\n"
                                      "Текст: \n{}\n"
                                      "Голосов: {}\n"
+                                     "Ваш голос: {}\n"
                                      "Проверено модератором: {}").format(
                     feedback.title, feedback.date,
                     get_exist_attr(generator_row[3], "nickname")
                     if not feedback.anonymously else "Скрыто",
                     get_exist_attr(generator_row[1], "name"),
                     get_exist_attr(generator_row[2], "name"),
-                    feedback.text, feedback.votes, feedback.is_approved
+                    feedback.text, feedback.votes, like_symbol,
+                    feedback.is_approved
                 ), reply_markup=markup)
             except RuntimeError:
                 await message.reply("Нет такого отзыва")
@@ -195,6 +203,7 @@ class BotFeedback(BotBase):
             feedback_name = data["selected_feedback"]
 
         feedback = self.database.get_feedback(feedback_name)
+        has_like = self.database.feedback_has_like(telegram_id, feedback.title)
 
         if (feedback.student_id == student.id or student.permissions != 'user')\
                 and text == "Удалить":
@@ -213,9 +222,18 @@ class BotFeedback(BotBase):
             await FeedBack.select_feedback.set()
             await message.reply("Отзывы", reply_markup=markup)
         elif feedback.is_approved and text == "Проголосовать":
-            feedback.votes = feedback.votes + 1
             try:
-                self.database.update_feedback(feedback)
+                if not has_like:
+                    feedback.votes = feedback.votes + 1
+                    self.database.update_feedback(feedback)
+                    self.database.add_student_like(telegram_id, feedback.title)
+                else:
+                    feedback.votes = feedback.votes - 1
+                    self.database.update_feedback(feedback)
+                    self.database.delete_student_like(
+                        self.database.get_student(telegram_id=telegram_id),
+                        self.database.get_feedback(feedback.title)
+                    )
                 await state.finish()
                 await message.reply(
                     "Успех", reply_markup=BotBase.none_state_keyboard()
@@ -225,12 +243,37 @@ class BotFeedback(BotBase):
                 await message.reply(
                     "Ошибка", reply_markup=BotBase.none_state_keyboard()
                 )
+        elif student.permissions != 'user' and text == "Написать автору":
+            await FeedBack.enter_message_to_author.set()
+            await message.reply("Введите сообщение автору отзыва")
         elif text == "ОК":
             markup = BotBase.select_feedback_keyboard(descriptor, student)
             await FeedBack.select_feedback.set()
             await message.reply("Отзывы", reply_markup=markup)
         else:
             await message.reply("Неверная команда")
+
+    async def enter_message_to_author_handler(
+            self, message: types.Message, state: FSMContext
+    ):
+        async with state.proxy() as data:
+            feedback_name = data["selected_feedback"]
+            try:
+                feedback = self.database.get_feedback(feedback_name)
+                author_telegram_id = str(feedback.student.telegram_id)
+                await self.bot.send_message(
+                    author_telegram_id,
+                    message.text
+                )
+                await state.finish()
+                await message.reply(
+                    "Успех", reply_markup=BotBase.none_state_keyboard()
+                )
+            except RuntimeError:
+                await state.finish()
+                await message.reply(
+                    "Ошибка", reply_markup=BotBase.none_state_keyboard()
+                )
 
     async def delete_feedback_confirm_handler(
             self, message: types.Message, state: FSMContext
@@ -483,6 +526,10 @@ class BotFeedback(BotBase):
         self.dp.register_message_handler(
             self.delete_feedback_confirm_handler,
             state=FeedBack.delete_feedback_confirm
+        )
+        self.dp.register_message_handler(
+            self.enter_message_to_author_handler,
+            state=FeedBack.enter_message_to_author
         )
         self.dp.register_message_handler(
             self.new_feedback_title_handler,

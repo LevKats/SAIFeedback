@@ -17,7 +17,6 @@ class BotCore(BotBase):
         kwargs: {name: (module, permission)}
         """
         self.token = token
-        self.bot = Bot(token=self.token)
         self.storage = MemoryStorage()
         self.admin_nickname = admin_nickname
 
@@ -27,8 +26,11 @@ class BotCore(BotBase):
 
         descriptors = {}
 
+        bot = Bot(token=self.token)
+
         super().__init__(
-            database, descriptors, Dispatcher(self.bot, storage=self.storage)
+            database, descriptors, Dispatcher(bot, storage=self.storage),
+            bot
         )
         try:
             self.database.add_group("DEFAULT", "email@example.com", "ADMIN")
@@ -58,7 +60,7 @@ class BotCore(BotBase):
             for permission in self.main_menu_keyboards:
                 if priority <= permissions[permission]:
                     self.main_menu_keyboards[permission].add(module.func_name)
-            self.modules.append(module(database, descriptors, self.dp))
+            self.modules.append(module(database, descriptors, self.dp, self.bot))
         for permission in self.main_menu_keyboards:
             self.main_menu_keyboards[permission].add("Помощь")
 
@@ -87,7 +89,8 @@ class BotCore(BotBase):
             await message.reply(
                 ("Ваше имя {}\n"
                  "Используйте /start для начала общения с ботом\n"
-                 "Используйте /menu для открытия меню").format(
+                 "Используйте /menu для открытия меню\n"
+                 "Последнее обновление бота 25.03.21").format(
                     student.nickname
                 ),
                 reply_markup=BotBase.none_state_keyboard()

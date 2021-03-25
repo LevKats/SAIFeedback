@@ -6,10 +6,11 @@ from abc import abstractmethod
 
 
 class BotBase(object):
-    def __init__(self, database: DBRequests, descriptors: dict, dp):
+    def __init__(self, database: DBRequests, descriptors: dict, dp, bot):
         self.database = database
         self.descriptors = descriptors
         self.dp = dp
+        self.bot = bot
 
     @abstractmethod
     def register_handlers(self):

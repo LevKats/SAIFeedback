@@ -2,7 +2,7 @@ from sqlalchemy import ForeignKey, Column, Integer, String, DateTime, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 from sqlalchemy import or_
-from sqlalchemy import desc
+from sqlalchemy import desc, asc
 import datetime
 import logging
 
@@ -211,6 +211,24 @@ class DBRequests:
                     self.id, self.feedback_id, self.teacher_id
                 )
 
+        class FeedbackLike(base):
+            __tablename__ = "feedback_likes"
+
+            id = Column(Integer, primary_key=True)
+            student_id = Column(Integer, ForeignKey('students.id'))
+            feedback_id = Column(Integer, ForeignKey('feedbacks.id'))
+
+            student = relationship("Student", back_populates="student_likes")
+            feedback = relationship("Feedback", back_populates="feedback_likes")
+
+            def __str__(self):
+                return (
+                    "GroupEvent(id={}, group_id={}, event_id={},"
+                    ")") \
+                    .format(
+                    self.id, self.student_id, self.feedback_id,
+                )
+
         self.group = Group
         self.event = Event
         self.group_event = GroupEvent
@@ -220,6 +238,7 @@ class DBRequests:
         self.feedback = Feedback
         self.feedback_event = FeedbackEvent
         self.feedback_teacher = FeedbackTeacher
+        self.feedback_like = FeedbackLike
 
         self.group.group_events = relationship(
             "GroupEvent", order_by=GroupEvent.id, back_populates="group",
@@ -251,6 +270,11 @@ class DBRequests:
             back_populates="student",
             cascade="all, delete, delete-orphan"
         )
+        self.student.student_likes = relationship(
+            "FeedbackLike", order_by=FeedbackLike.id,
+            back_populates="student",
+            cascade="all, delete, delete-orphan"
+        )
         self.teacher.events = relationship(
             "Event", order_by=Event.id, back_populates="teacher",
             cascade="all, delete, delete-orphan"
@@ -267,6 +291,11 @@ class DBRequests:
         )
         self.feedback.feedback_teachers = relationship(
             "FeedbackTeacher", order_by=FeedbackTeacher.id,
+            back_populates="feedback",
+            cascade="all, delete, delete-orphan"
+        )
+        self.feedback.feedback_likes = relationship(
+            "FeedbackLike", order_by=FeedbackLike.id,
             back_populates="feedback",
             cascade="all, delete, delete-orphan"
         )
@@ -350,7 +379,9 @@ class DBRequests:
 
     def get_teacher_name_list(self):
         return [
-            row.name for row in self.session.query(self.teacher).all()
+            row.name for row in self.session.query(
+                self.teacher
+            ).order_by(asc(self.teacher.name)).all()
         ]
 
     def add_event(self, name, date, is_regular, teacher_name):
@@ -383,7 +414,9 @@ class DBRequests:
         return event
 
     def get_event_name_list(self):
-        return [row.name for row in self.session.query(self.event).all()]
+        return [row.name for row in self.session.query(
+            self.event
+        ).order_by(asc(self.event.name)).all()]
 
     def delete_event(self, event):
         self.session.delete(event)
@@ -498,6 +531,68 @@ class DBRequests:
         self.session.delete(pe)
         self.session.commit()
 
+    def add_student_like(self, student_telegram_id, feedback_title):
+        student = self.session.query(self.student).filter(
+            self.student.telegram_id == student_telegram_id
+        ).first()
+        feedback = self.session.query(self.feedback).filter(
+            self.feedback.title == feedback_title
+        ).first()
+
+        if student is None:
+            raise RuntimeError(
+                "student {} doesn't exists".format(student_telegram_id)
+            )
+        if feedback is None:
+            raise RuntimeError("event {} doesn't exists".format(feedback_title))
+
+        if self.session.query(self.feedback_like).filter(
+                self.feedback_like.student_id == student.id,
+                self.feedback_like.feedback_id == feedback.id
+        ).first() is not None:
+            raise RuntimeError(
+                "pearson event ({}, {}) exists".format(
+                    student_telegram_id, feedback_title
+                )
+            )
+
+        fl = self.feedback_like()
+        fl.feedback = feedback
+        student.student_likes.append(fl)
+        self.session.commit()
+
+    def delete_student_like(self, student, feedback):
+        fl = self.session.query(self.feedback_like).filter(
+                self.feedback_like.student_id == student.id,
+                self.feedback_like.feedback_id == feedback.id
+        ).first()
+        if fl is None:
+            raise RuntimeError(
+                "pearson event ({}, {}) doesn't exists".format(
+                    student.telegram_id, feedback.title
+                )
+            )
+        self.session.delete(fl)
+        self.session.commit()
+
+    def feedback_has_like(self, student_telegram_id, feedback_title):
+        student = self.session.query(self.student).filter(
+            self.student.telegram_id == student_telegram_id
+        ).first()
+        feedback = self.session.query(self.feedback).filter(
+            self.feedback.title == feedback_title
+        ).first()
+
+        if student is None:
+            return False
+        if feedback is None:
+            return False
+
+        return self.session.query(self.feedback_like).filter(
+                self.feedback_like.student_id == student.id,
+                self.feedback_like.feedback_id == feedback.id
+        ).first() is not None
+
     def add_group_event(self, group_name, event_name):
         group = self.session.query(self.group).filter(
             self.group.name == group_name
@@ -550,6 +645,8 @@ class DBRequests:
         return [
             row.event.name for row in self.session.query(
                 self.group_event
+            ).order_by(
+                asc(self.group_event.event.name)
             ).filter(self.group_event.group_id == group.id)
         ]
 
@@ -565,11 +662,11 @@ class DBRequests:
             )
         )
         # print([row.name for row in query.all()])
-        return [row.name for row in query.all()]
+        return [row.name for row in query.order_by(asc(self.event.name)).all()]
 
     def get_available_events_for_student(self, student):
         se = self.get_student_events(student)
-        for event in self.session.query(self.event):
+        for event in self.session.query(self.event).order_by(asc(self.event.name)):
             if event.name not in se:
                 yield event.name
 
